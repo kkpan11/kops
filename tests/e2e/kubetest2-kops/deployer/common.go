@@ -51,6 +51,12 @@ func (d *deployer) initialize() error {
 
 	switch d.CloudProvider {
 	case "aws":
+		if d.SSHPrivateKeyPath == "" {
+			d.SSHPrivateKeyPath = os.Getenv("AWS_SSH_PRIVATE_KEY_FILE")
+		}
+		if d.SSHPublicKeyPath == "" {
+			d.SSHPublicKeyPath = os.Getenv("AWS_SSH_PUBLIC_KEY_FILE")
+		}
 		if d.SSHPrivateKeyPath == "" || d.SSHPublicKeyPath == "" {
 			publicKeyPath, privateKeyPath, err := util.CreateSSHKeyPair(d.ClusterName)
 			if err != nil {
@@ -90,6 +96,12 @@ func (d *deployer) initialize() error {
 			d.GCPProject = resource.Name
 			klog.V(1).Infof("Got project %s from boskos", d.GCPProject)
 
+			if d.SSHPrivateKeyPath == "" {
+				d.SSHPrivateKeyPath = os.Getenv("GCE_SSH_PRIVATE_KEY_FILE")
+			}
+			if d.SSHPublicKeyPath == "" {
+				d.SSHPublicKeyPath = os.Getenv("GCE_SSH_PUBLIC_KEY_FILE")
+			}
 			if d.SSHPrivateKeyPath == "" && d.SSHPublicKeyPath == "" {
 				privateKey, publicKey, err := gce.SetupSSH(d.GCPProject)
 				if err != nil {
@@ -98,11 +110,14 @@ func (d *deployer) initialize() error {
 				d.SSHPrivateKeyPath = privateKey
 				d.SSHPublicKeyPath = publicKey
 			}
+
 			d.createBucket = true
 		} else if d.SSHPrivateKeyPath == "" && os.Getenv("KUBE_SSH_KEY_PATH") != "" {
 			d.SSHPrivateKeyPath = os.Getenv("KUBE_SSH_KEY_PATH")
 		}
 	}
+
+	klog.V(1).Infof("Using SSH keypair: [%s,%s]", d.SSHPrivateKeyPath, d.SSHPublicKeyPath)
 
 	if d.commonOptions.ShouldBuild() {
 		if err := d.verifyBuildFlags(); err != nil {
@@ -113,8 +128,10 @@ func (d *deployer) initialize() error {
 	if d.SSHUser == "" {
 		d.SSHUser = os.Getenv("KUBE_SSH_USER")
 	}
+	klog.V(1).Infof("Using SSH user: [%s]", d.SSHUser)
+
 	if d.TerraformVersion != "" {
-		t, err := target.NewTerraform(d.TerraformVersion)
+		t, err := target.NewTerraform(d.TerraformVersion, d.ArtifactsDir)
 		if err != nil {
 			return err
 		}
@@ -283,9 +300,17 @@ func defaultClusterName(cloudProvider string) (string, error) {
 		jobName = jobName[:79]
 	}
 	if jobType == "presubmit" {
-		return fmt.Sprintf("e2e-pr%s.%s.%s", pullNumber, jobName, suffix), nil
+		jobName = fmt.Sprintf("e2e-pr%s.%s", pullNumber, jobName)
+	} else {
+		jobName = fmt.Sprintf("e2e-%s", jobName)
 	}
-	return fmt.Sprintf("e2e-%s.%s", jobName, suffix), nil
+
+	// GCP has char limit of 64
+	gcpLimit := 63 - (len(suffix) + 1) // 1 for the dot
+	if len(jobName) > gcpLimit && cloudProvider == "gce" {
+		jobName = jobName[:gcpLimit]
+	}
+	return fmt.Sprintf("%v.%v", jobName, suffix), nil
 }
 
 // stateStore returns the kops state store to use
@@ -304,6 +329,18 @@ func (d *deployer) stateStore() string {
 		}
 	}
 	return ss
+}
+
+// discoveryStore returns the VFS path to use for public OIDC documents
+func (d *deployer) discoveryStore() string {
+	discovery := os.Getenv("KOPS_DISCOVERY_STORE")
+	if discovery == "" {
+		switch d.CloudProvider {
+		case "aws":
+			discovery = "s3://k8s-kops-ci-prow"
+		}
+	}
+	return discovery
 }
 
 func (d *deployer) stagingStore() string {

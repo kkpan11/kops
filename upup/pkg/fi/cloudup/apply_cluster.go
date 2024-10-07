@@ -59,6 +59,7 @@ import (
 	"k8s.io/kops/upup/pkg/fi/cloudup/do"
 	"k8s.io/kops/upup/pkg/fi/cloudup/gce"
 	"k8s.io/kops/upup/pkg/fi/cloudup/hetzner"
+	"k8s.io/kops/upup/pkg/fi/cloudup/metal"
 	"k8s.io/kops/upup/pkg/fi/cloudup/openstack"
 	"k8s.io/kops/upup/pkg/fi/cloudup/scaleway"
 	"k8s.io/kops/upup/pkg/fi/cloudup/terraform"
@@ -482,6 +483,9 @@ func (c *ApplyClusterCmd) Run(ctx context.Context) (*ApplyResults, error) {
 			scwZone = scwCloud.Zone()
 		}
 
+	case kops.CloudProviderMetal:
+		// Metal is a special case, we don't need to do anything here (yet)
+
 	default:
 		return nil, fmt.Errorf("unknown CloudProvider %q", cluster.GetCloudProvider())
 	}
@@ -577,7 +581,7 @@ func (c *ApplyClusterCmd) Run(ctx context.Context) (*ApplyResults, error) {
 				&awsmodel.SSHKeyModelBuilder{AWSModelContext: awsModelContext, Lifecycle: securityLifecycle},
 				&awsmodel.NetworkModelBuilder{AWSModelContext: awsModelContext, Lifecycle: networkLifecycle},
 				&awsmodel.IAMModelBuilder{AWSModelContext: awsModelContext, Lifecycle: securityLifecycle, Cluster: cluster},
-				&awsmodel.OIDCProviderBuilder{AWSModelContext: awsModelContext, Lifecycle: securityLifecycle, KeyStore: keyStore},
+				&awsmodel.OIDCProviderBuilder{AWSModelContext: awsModelContext, Lifecycle: securityLifecycle},
 			)
 
 			awsModelBuilder := &awsmodel.AutoscalingGroupModelBuilder{
@@ -686,6 +690,9 @@ func (c *ApplyClusterCmd) Run(ctx context.Context) (*ApplyResults, error) {
 				&scalewaymodel.SSHKeyModelBuilder{ScwModelContext: scwModelContext, Lifecycle: securityLifecycle},
 			)
 
+		case kops.CloudProviderMetal:
+			// No special builders for bare metal (yet)
+
 		default:
 			return nil, fmt.Errorf("unknown cloudprovider %q", cluster.GetCloudProvider())
 		}
@@ -716,6 +723,8 @@ func (c *ApplyClusterCmd) Run(ctx context.Context) (*ApplyResults, error) {
 			target = azure.NewAzureAPITarget(cloud.(azure.AzureCloud))
 		case kops.CloudProviderScaleway:
 			target = scaleway.NewScwAPITarget(cloud.(scaleway.ScwCloud))
+		case kops.CloudProviderMetal:
+			target = metal.NewAPITarget(cloud.(*metal.Cloud), nil)
 		default:
 			return nil, fmt.Errorf("direct configuration not supported with CloudProvider:%q", cluster.GetCloudProvider())
 		}
@@ -918,15 +927,21 @@ func (c *ApplyClusterCmd) validateKubernetesVersion() error {
 		tooNewVersion.Pre = nil
 		tooNewVersion.Build = nil
 		if util.IsKubernetesGTE(tooNewVersion.String(), *parsed) {
+			bypassCheck := os.Getenv("KOPS_RUN_TOO_NEW_VERSION") != ""
+
 			fmt.Printf("\n")
 			fmt.Printf("%s\n", starline)
 			fmt.Printf("\n")
 			fmt.Printf("This version of kubernetes is not yet supported; upgrading kops is required\n")
-			fmt.Printf("(you can bypass this check by exporting KOPS_RUN_TOO_NEW_VERSION)\n")
+			if bypassCheck {
+				fmt.Printf("(this check has been bypassed by exporting KOPS_RUN_TOO_NEW_VERSION)\n")
+			} else {
+				fmt.Printf("(you can bypass this check by exporting KOPS_RUN_TOO_NEW_VERSION)\n")
+			}
 			fmt.Printf("\n")
 			fmt.Printf("%s\n", starline)
 			fmt.Printf("\n")
-			if os.Getenv("KOPS_RUN_TOO_NEW_VERSION") == "" {
+			if !bypassCheck {
 				return fmt.Errorf("kops upgrade is required")
 			}
 		}
