@@ -4,17 +4,14 @@ package ec2
 
 import (
 	"context"
-	"fmt"
-	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/smithy-go/middleware"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
 // Deletes a security group.
 //
 // If you attempt to delete a security group that is associated with an instance
-// or network interface or is referenced by another security group in the same VPC,
-// the operation fails with DependencyViolation .
+// or network interface, is referenced by another security group in the same VPC,
+// or has a VPC association, the operation fails with DependencyViolation .
 func (c *Client) DeleteSecurityGroup(ctx context.Context, params *DeleteSecurityGroupInput, optFns ...func(*Options)) (*DeleteSecurityGroupOutput, error) {
 	if params == nil {
 		params = &DeleteSecurityGroupInput{}
@@ -50,6 +47,13 @@ type DeleteSecurityGroupInput struct {
 }
 
 type DeleteSecurityGroupOutput struct {
+
+	// The ID of the deleted security group.
+	GroupId *string
+
+	// Returns true if the request succeeds; otherwise, returns an error.
+	Return *bool
+
 	// Metadata pertaining to the operation's result.
 	ResultMetadata middleware.Metadata
 
@@ -57,9 +61,6 @@ type DeleteSecurityGroupOutput struct {
 }
 
 func (c *Client) addOperationDeleteSecurityGroupMiddlewares(stack *middleware.Stack, options Options) (err error) {
-	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
-		return err
-	}
 	err = stack.Serialize.Add(&awsEc2query_serializeOpDeleteSecurityGroup{}, middleware.After)
 	if err != nil {
 		return err
@@ -68,19 +69,7 @@ func (c *Client) addOperationDeleteSecurityGroupMiddlewares(stack *middleware.St
 	if err != nil {
 		return err
 	}
-	if err := addProtocolFinalizerMiddlewares(stack, options, "DeleteSecurityGroup"); err != nil {
-		return fmt.Errorf("add protocol finalizers: %v", err)
-	}
 
-	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
-		return err
-	}
-	if err = addSetLoggerMiddleware(stack, options); err != nil {
-		return err
-	}
-	if err = addClientRequestID(stack); err != nil {
-		return err
-	}
 	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
@@ -90,37 +79,10 @@ func (c *Client) addOperationDeleteSecurityGroupMiddlewares(stack *middleware.St
 	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetry(stack, options); err != nil {
+	if err = addRecordResponseTiming(stack, options); err != nil {
 		return err
 	}
-	if err = addRawResponseToMetadata(stack); err != nil {
-		return err
-	}
-	if err = addRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack, options); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addTimeOffsetBuild(stack, c); err != nil {
-		return err
-	}
-	if err = addUserAgentRetryMode(stack, options); err != nil {
-		return err
-	}
-	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opDeleteSecurityGroup(options.Region), middleware.Before); err != nil {
-		return err
-	}
-	if err = addRecursionDetection(stack); err != nil {
+	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -135,13 +97,8 @@ func (c *Client) addOperationDeleteSecurityGroupMiddlewares(stack *middleware.St
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
-	return nil
-}
-
-func newServiceMetadataMiddleware_opDeleteSecurityGroup(region string) *awsmiddleware.RegisterServiceMetadata {
-	return &awsmiddleware.RegisterServiceMetadata{
-		Region:        region,
-		ServiceID:     ServiceID,
-		OperationName: "DeleteSecurityGroup",
+	if err = addInterceptors(stack, options); err != nil {
+		return err
 	}
+	return nil
 }

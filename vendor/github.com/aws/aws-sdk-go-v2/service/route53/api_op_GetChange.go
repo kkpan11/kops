@@ -5,13 +5,10 @@ package route53
 import (
 	"context"
 	"fmt"
-	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/service/route53/types"
 	"github.com/aws/smithy-go/middleware"
 	smithytime "github.com/aws/smithy-go/time"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
 	smithywaiter "github.com/aws/smithy-go/waiter"
-	jmespath "github.com/jmespath/go-jmespath"
 	"time"
 )
 
@@ -67,9 +64,6 @@ type GetChangeOutput struct {
 }
 
 func (c *Client) addOperationGetChangeMiddlewares(stack *middleware.Stack, options Options) (err error) {
-	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
-		return err
-	}
 	err = stack.Serialize.Add(&awsRestxml_serializeOpGetChange{}, middleware.After)
 	if err != nil {
 		return err
@@ -78,19 +72,7 @@ func (c *Client) addOperationGetChangeMiddlewares(stack *middleware.Stack, optio
 	if err != nil {
 		return err
 	}
-	if err := addProtocolFinalizerMiddlewares(stack, options, "GetChange"); err != nil {
-		return fmt.Errorf("add protocol finalizers: %v", err)
-	}
 
-	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
-		return err
-	}
-	if err = addSetLoggerMiddleware(stack, options); err != nil {
-		return err
-	}
-	if err = addClientRequestID(stack); err != nil {
-		return err
-	}
 	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
@@ -100,40 +82,13 @@ func (c *Client) addOperationGetChangeMiddlewares(stack *middleware.Stack, optio
 	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetry(stack, options); err != nil {
+	if err = addRecordResponseTiming(stack, options); err != nil {
 		return err
 	}
-	if err = addRawResponseToMetadata(stack); err != nil {
-		return err
-	}
-	if err = addRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack, options); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addTimeOffsetBuild(stack, c); err != nil {
-		return err
-	}
-	if err = addUserAgentRetryMode(stack, options); err != nil {
+	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
 	if err = addOpGetChangeValidationMiddleware(stack); err != nil {
-		return err
-	}
-	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opGetChange(options.Region), middleware.Before); err != nil {
-		return err
-	}
-	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -149,6 +104,9 @@ func (c *Client) addOperationGetChangeMiddlewares(stack *middleware.Stack, optio
 		return err
 	}
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
+	if err = addInterceptors(stack, options); err != nil {
 		return err
 	}
 	return nil
@@ -317,22 +275,23 @@ func (w *ResourceRecordSetsChangedWaiter) WaitForOutput(ctx context.Context, par
 func resourceRecordSetsChangedStateRetryable(ctx context.Context, input *GetChangeInput, output *GetChangeOutput, err error) (bool, error) {
 
 	if err == nil {
-		pathValue, err := jmespath.Search("ChangeInfo.Status", output)
-		if err != nil {
-			return false, fmt.Errorf("error evaluating waiter state: %w", err)
+		v1 := output.ChangeInfo
+		var v2 types.ChangeStatus
+		if v1 != nil {
+			v3 := v1.Status
+			v2 = v3
 		}
-
 		expectedValue := "INSYNC"
-		value, ok := pathValue.(types.ChangeStatus)
-		if !ok {
-			return false, fmt.Errorf("waiter comparator expected types.ChangeStatus value, got %T", pathValue)
-		}
-
-		if string(value) == expectedValue {
+		var pathValue string
+		pathValue = string(v2)
+		if pathValue == expectedValue {
 			return false, nil
 		}
 	}
 
+	if err != nil {
+		return false, err
+	}
 	return true, nil
 }
 
@@ -342,11 +301,3 @@ type GetChangeAPIClient interface {
 }
 
 var _ GetChangeAPIClient = (*Client)(nil)
-
-func newServiceMetadataMiddleware_opGetChange(region string) *awsmiddleware.RegisterServiceMetadata {
-	return &awsmiddleware.RegisterServiceMetadata{
-		Region:        region,
-		ServiceID:     ServiceID,
-		OperationName: "GetChange",
-	}
-}

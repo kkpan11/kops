@@ -4,10 +4,7 @@ package iam
 
 import (
 	"context"
-	"fmt"
-	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/smithy-go/middleware"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
 // Adds the specified IAM role to the specified instance profile. An instance
@@ -20,12 +17,21 @@ import (
 // The caller of this operation must be granted the PassRole permission on the IAM
 // role by a permissions policy.
 //
+// When using the [iam:AssociatedResourceArn] condition in a policy to restrict the [PassRole] IAM action, special
+// considerations apply if the policy is intended to define access for the
+// AddRoleToInstanceProfile action. In this case, you cannot specify a Region or
+// instance ID in the EC2 instance ARN. The ARN value must be
+// arn:aws:ec2:*:CallerAccountId:instance/* . Using any other ARN value may lead to
+// unexpected evaluation results.
+//
 // For more information about roles, see [IAM roles] in the IAM User Guide. For more
 // information about instance profiles, see [Using instance profiles]in the IAM User Guide.
 //
 // [disassociate the instance profile]: https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_DisassociateIamInstanceProfile.html
 // [associate the instance profile]: https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_AssociateIamInstanceProfile.html
 // [Using instance profiles]: https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2_instance-profiles.html
+// [PassRole]: https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_passrole.html
+// [iam:AssociatedResourceArn]: https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_iam-condition-keys.html#available-keys-for-iam
 // [eventual consistency]: https://en.wikipedia.org/wiki/Eventual_consistency
 // [IAM roles]: https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles.html
 func (c *Client) AddRoleToInstanceProfile(ctx context.Context, params *AddRoleToInstanceProfileInput, optFns ...func(*Options)) (*AddRoleToInstanceProfileOutput, error) {
@@ -78,9 +84,6 @@ type AddRoleToInstanceProfileOutput struct {
 }
 
 func (c *Client) addOperationAddRoleToInstanceProfileMiddlewares(stack *middleware.Stack, options Options) (err error) {
-	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
-		return err
-	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpAddRoleToInstanceProfile{}, middleware.After)
 	if err != nil {
 		return err
@@ -89,19 +92,7 @@ func (c *Client) addOperationAddRoleToInstanceProfileMiddlewares(stack *middlewa
 	if err != nil {
 		return err
 	}
-	if err := addProtocolFinalizerMiddlewares(stack, options, "AddRoleToInstanceProfile"); err != nil {
-		return fmt.Errorf("add protocol finalizers: %v", err)
-	}
 
-	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
-		return err
-	}
-	if err = addSetLoggerMiddleware(stack, options); err != nil {
-		return err
-	}
-	if err = addClientRequestID(stack); err != nil {
-		return err
-	}
 	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
@@ -111,40 +102,13 @@ func (c *Client) addOperationAddRoleToInstanceProfileMiddlewares(stack *middlewa
 	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetry(stack, options); err != nil {
+	if err = addRecordResponseTiming(stack, options); err != nil {
 		return err
 	}
-	if err = addRawResponseToMetadata(stack); err != nil {
-		return err
-	}
-	if err = addRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack, options); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addTimeOffsetBuild(stack, c); err != nil {
-		return err
-	}
-	if err = addUserAgentRetryMode(stack, options); err != nil {
+	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
 	if err = addOpAddRoleToInstanceProfileValidationMiddleware(stack); err != nil {
-		return err
-	}
-	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opAddRoleToInstanceProfile(options.Region), middleware.Before); err != nil {
-		return err
-	}
-	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -159,13 +123,8 @@ func (c *Client) addOperationAddRoleToInstanceProfileMiddlewares(stack *middlewa
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
-	return nil
-}
-
-func newServiceMetadataMiddleware_opAddRoleToInstanceProfile(region string) *awsmiddleware.RegisterServiceMetadata {
-	return &awsmiddleware.RegisterServiceMetadata{
-		Region:        region,
-		ServiceID:     ServiceID,
-		OperationName: "AddRoleToInstanceProfile",
+	if err = addInterceptors(stack, options); err != nil {
+		return err
 	}
+	return nil
 }

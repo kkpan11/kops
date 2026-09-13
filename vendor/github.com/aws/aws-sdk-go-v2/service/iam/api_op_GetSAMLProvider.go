@@ -4,11 +4,8 @@ package iam
 
 import (
 	"context"
-	"fmt"
-	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/service/iam/types"
 	"github.com/aws/smithy-go/middleware"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
 	"time"
 )
 
@@ -49,14 +46,25 @@ type GetSAMLProviderInput struct {
 	noSmithyDocumentSerde
 }
 
-// Contains the response to a successful GetSAMLProvider request.
+// Contains the response to a successful [GetSAMLProvider] request.
+//
+// [GetSAMLProvider]: https://docs.aws.amazon.com/IAM/latest/APIReference/API_GetSAMLProvider.html
 type GetSAMLProviderOutput struct {
+
+	// Specifies the encryption setting for the SAML provider.
+	AssertionEncryptionMode types.AssertionEncryptionModeType
 
 	// The date and time when the SAML provider was created.
 	CreateDate *time.Time
 
+	// The private key metadata for the SAML provider.
+	PrivateKeyList []types.SAMLPrivateKey
+
 	// The XML metadata document that includes information about an identity provider.
 	SAMLMetadataDocument *string
+
+	// The unique identifier assigned to the SAML provider.
+	SAMLProviderUUID *string
 
 	// A list of tags that are attached to the specified IAM SAML provider. The
 	// returned list of tags is sorted by tag key. For more information about tagging,
@@ -75,9 +83,6 @@ type GetSAMLProviderOutput struct {
 }
 
 func (c *Client) addOperationGetSAMLProviderMiddlewares(stack *middleware.Stack, options Options) (err error) {
-	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
-		return err
-	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpGetSAMLProvider{}, middleware.After)
 	if err != nil {
 		return err
@@ -86,19 +91,7 @@ func (c *Client) addOperationGetSAMLProviderMiddlewares(stack *middleware.Stack,
 	if err != nil {
 		return err
 	}
-	if err := addProtocolFinalizerMiddlewares(stack, options, "GetSAMLProvider"); err != nil {
-		return fmt.Errorf("add protocol finalizers: %v", err)
-	}
 
-	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
-		return err
-	}
-	if err = addSetLoggerMiddleware(stack, options); err != nil {
-		return err
-	}
-	if err = addClientRequestID(stack); err != nil {
-		return err
-	}
 	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
@@ -108,40 +101,13 @@ func (c *Client) addOperationGetSAMLProviderMiddlewares(stack *middleware.Stack,
 	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetry(stack, options); err != nil {
+	if err = addRecordResponseTiming(stack, options); err != nil {
 		return err
 	}
-	if err = addRawResponseToMetadata(stack); err != nil {
-		return err
-	}
-	if err = addRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack, options); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addTimeOffsetBuild(stack, c); err != nil {
-		return err
-	}
-	if err = addUserAgentRetryMode(stack, options); err != nil {
+	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
 	if err = addOpGetSAMLProviderValidationMiddleware(stack); err != nil {
-		return err
-	}
-	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opGetSAMLProvider(options.Region), middleware.Before); err != nil {
-		return err
-	}
-	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -156,13 +122,8 @@ func (c *Client) addOperationGetSAMLProviderMiddlewares(stack *middleware.Stack,
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
-	return nil
-}
-
-func newServiceMetadataMiddleware_opGetSAMLProvider(region string) *awsmiddleware.RegisterServiceMetadata {
-	return &awsmiddleware.RegisterServiceMetadata{
-		Region:        region,
-		ServiceID:     ServiceID,
-		OperationName: "GetSAMLProvider",
+	if err = addInterceptors(stack, options); err != nil {
+		return err
 	}
+	return nil
 }

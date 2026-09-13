@@ -20,16 +20,18 @@ import (
 	"context"
 	stderrors "errors"
 	"fmt"
+	"maps"
+	"slices"
 	"sort"
 	"sync"
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/errors"
-	"k8s.io/kops/pkg/client/simple"
-
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
+
 	api "k8s.io/kops/pkg/apis/kops"
+	"k8s.io/kops/pkg/client/simple"
 	"k8s.io/kops/pkg/cloudinstances"
 	"k8s.io/kops/pkg/validation"
 	"k8s.io/kops/upup/pkg/fi"
@@ -38,7 +40,6 @@ import (
 // RollingUpdateCluster is a struct containing cluster information for a rolling update.
 type RollingUpdateCluster struct {
 	Clientset simple.Clientset
-	Ctx       context.Context
 	Cluster   *api.Cluster
 	Cloud     fi.Cloud
 
@@ -106,7 +107,7 @@ func (*RollingUpdateCluster) AdjustNeedUpdate(groups map[string]*cloudinstances.
 }
 
 // RollingUpdate performs a rolling update on a K8s Cluster.
-func (c *RollingUpdateCluster) RollingUpdate(groups map[string]*cloudinstances.CloudInstanceGroup, instanceGroups *api.InstanceGroupList) error {
+func (c *RollingUpdateCluster) RollingUpdate(ctx context.Context, groups map[string]*cloudinstances.CloudInstanceGroup, instanceGroups *api.InstanceGroupList) error {
 	if len(groups) == 0 {
 		klog.Info("Cloud Instance Group length is zero. Not doing a rolling-update.")
 		return nil
@@ -120,14 +121,14 @@ func (c *RollingUpdateCluster) RollingUpdate(groups map[string]*cloudinstances.C
 	nodeGroups := make(map[string]*cloudinstances.CloudInstanceGroup)
 	bastionGroups := make(map[string]*cloudinstances.CloudInstanceGroup)
 	for k, group := range groups {
-		switch group.InstanceGroup.Spec.Role {
-		case api.InstanceGroupRoleNode:
+		switch {
+		case group.InstanceGroup.Spec.Role.HasNode():
 			nodeGroups[k] = group
-		case api.InstanceGroupRoleAPIServer:
+		case group.InstanceGroup.Spec.Role.HasAPIServer():
 			apiServerGroups[k] = group
-		case api.InstanceGroupRoleControlPlane:
+		case group.InstanceGroup.Spec.Role.HasControlPlane():
 			masterGroups[k] = group
-		case api.InstanceGroupRoleBastion:
+		case group.InstanceGroup.Spec.Role.HasBastion():
 			bastionGroups[k] = group
 		default:
 			return fmt.Errorf("unknown group type for group %q", group.InstanceGroup.ObjectMeta.Name)
@@ -147,7 +148,7 @@ func (c *RollingUpdateCluster) RollingUpdate(groups map[string]*cloudinstances.C
 
 				defer wg.Done()
 
-				err := c.rollingUpdateInstanceGroup(bastionGroups[k], c.BastionInterval)
+				err := c.rollingUpdateInstanceGroup(ctx, bastionGroups[k], c.BastionInterval)
 
 				resultsMutex.Lock()
 				results[k] = err
@@ -172,7 +173,7 @@ func (c *RollingUpdateCluster) RollingUpdate(groups map[string]*cloudinstances.C
 		// and we don't want to roll all the control-plane nodes at the same time.  See issue #284
 
 		for _, k := range sortGroups(masterGroups) {
-			err := c.rollingUpdateInstanceGroup(masterGroups[k], c.MasterInterval)
+			err := c.rollingUpdateInstanceGroup(ctx, masterGroups[k], c.MasterInterval)
 			// Do not continue update if control-plane node(s) failed; cluster is potentially in an unhealthy state.
 			if err != nil {
 				return fmt.Errorf("control-plane node not healthy after update, stopping rolling-update: %q", err)
@@ -187,7 +188,7 @@ func (c *RollingUpdateCluster) RollingUpdate(groups map[string]*cloudinstances.C
 		}
 
 		for _, k := range sortGroups(apiServerGroups) {
-			err := c.rollingUpdateInstanceGroup(apiServerGroups[k], c.NodeInterval)
+			err := c.rollingUpdateInstanceGroup(ctx, apiServerGroups[k], c.NodeInterval)
 			results[k] = err
 			if err != nil {
 				klog.Errorf("failed to roll InstanceGroup %q: %v", k, err)
@@ -212,7 +213,7 @@ func (c *RollingUpdateCluster) RollingUpdate(groups map[string]*cloudinstances.C
 		}
 
 		for _, k := range sortGroups(nodeGroups) {
-			err := c.rollingUpdateInstanceGroup(nodeGroups[k], c.NodeInterval)
+			err := c.rollingUpdateInstanceGroup(ctx, nodeGroups[k], c.NodeInterval)
 			results[k] = err
 			if err != nil {
 				klog.Errorf("failed to roll InstanceGroup %q: %v", k, err)
@@ -231,7 +232,8 @@ func (c *RollingUpdateCluster) RollingUpdate(groups map[string]*cloudinstances.C
 		}
 	}
 
-	klog.Infof("Rolling update completed for cluster %q!", c.ClusterName)
+	igNames := slices.Sorted(maps.Keys(groups))
+	klog.Infof("Completed rolling update for cluster %q instance groups %v", c.ClusterName, igNames)
 	return errors.NewAggregate(errs)
 }
 
@@ -249,7 +251,10 @@ func sortGroups(groupMap map[string]*cloudinstances.CloudInstanceGroup) []string
 //
 // For example, if a cluster is unable to be validated by the deadline, then it
 // is unlikely that it will validate on the next instance roll, so an early exit as a
-// warning to the user is more appropriate.
+// warning to the user is more appropriate. Likewise, if we cannot deregister an
+// instance from cloud load balancers, continuing would leave traffic routed to
+// nodes that are being terminated, so we bail out instead of plowing through
+// the remaining instance groups.
 func isExitableError(err error) bool {
-	return stderrors.Is(err, &ValidationTimeoutError{})
+	return stderrors.Is(err, &ValidationTimeoutError{}) || stderrors.Is(err, &DeregisterError{})
 }

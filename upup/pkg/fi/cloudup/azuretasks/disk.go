@@ -35,6 +35,7 @@ type Disk struct {
 	ResourceGroup *ResourceGroup
 	SizeGB        *int32
 	Tags          map[string]*string
+	VolumeType    *compute.DiskStorageAccountTypes
 	Zones         []*string
 }
 
@@ -66,6 +67,10 @@ func (d *Disk) Find(c *fi.CloudupContext) (*Disk, error) {
 	if found == nil {
 		return nil, nil
 	}
+	if found.Properties != nil && fi.ValueOf(found.Properties.ProvisioningState) == "Failed" {
+		klog.Warningf("found disk %q in failed provisioning state", *d.Name)
+		return nil, nil
+	}
 
 	disk := &Disk{
 		Name:      d.Name,
@@ -76,6 +81,9 @@ func (d *Disk) Find(c *fi.CloudupContext) (*Disk, error) {
 		SizeGB: found.Properties.DiskSizeGB,
 		Tags:   found.Tags,
 		Zones:  found.Zones,
+	}
+	if found.SKU != nil && found.SKU.Name != nil {
+		disk.VolumeType = found.SKU.Name
 	}
 	if found.Properties != nil {
 		disk.SizeGB = found.Properties.DiskSizeGB
@@ -129,7 +137,7 @@ func (*Disk) RenderAzure(t *azure.AzureAPITarget, a, e, changes *Disk) error {
 			DiskSizeGB: e.SizeGB,
 		},
 		SKU: &compute.DiskSKU{
-			Name: to.Ptr(compute.DiskStorageAccountTypesStandardSSDLRS),
+			Name: e.VolumeType,
 		},
 		Tags:  e.Tags,
 		Zones: e.Zones,

@@ -22,6 +22,14 @@ const (
 	// Load Balancer network types
 	LoadBalancerNetworkTypeExternal = "EXTERNAL"
 	LoadBalancerNetworkTypeInternal = "INTERNAL"
+
+	// Load Balancer network_stack types
+	LoadBalancerNetworkStackIPv4      = "IPV4"
+	LoadBalancerNetworkStackDualstack = "DUALSTACK"
+
+	// Supported TLS Cipher policies
+	LoadBalancerTLSCipherPolicyDefault = "DEFAULT"
+	LoadBalancerTLSCipherPolicyStrong  = "STRONG"
 )
 
 // LoadBalancersService is an interface for managing load balancers with the DigitalOcean API.
@@ -29,6 +37,8 @@ const (
 type LoadBalancersService interface {
 	Get(context.Context, string) (*LoadBalancer, *Response, error)
 	List(context.Context, *ListOptions) ([]LoadBalancer, *Response, error)
+	ListByNames(context.Context, []string, *ListOptions) ([]LoadBalancer, *Response, error)
+	ListByUUIDs(context.Context, []string, *ListOptions) ([]LoadBalancer, *Response, error)
 	Create(context.Context, *LoadBalancerRequest) (*LoadBalancer, *Response, error)
 	Update(ctx context.Context, lbID string, lbr *LoadBalancerRequest) (*LoadBalancer, *Response, error)
 	Delete(ctx context.Context, lbID string) (*Response, error)
@@ -45,6 +55,7 @@ type LoadBalancer struct {
 	ID   string `json:"id,omitempty"`
 	Name string `json:"name,omitempty"`
 	IP   string `json:"ip,omitempty"`
+	IPv6 string `json:"ipv6,omitempty"`
 	// SizeSlug is mutually exclusive with SizeUnit. Only one should be specified
 	SizeSlug string `json:"size,omitempty"`
 	// SizeUnit is mutually exclusive with SizeSlug. Only one should be specified
@@ -64,6 +75,7 @@ type LoadBalancer struct {
 	EnableProxyProtocol          bool             `json:"enable_proxy_protocol,omitempty"`
 	EnableBackendKeepalive       bool             `json:"enable_backend_keepalive,omitempty"`
 	VPCUUID                      string           `json:"vpc_uuid,omitempty"`
+	VPCSubnetUUID                string           `json:"subnet_uuid,omitempty"`
 	DisableLetsEncryptDNSRecords *bool            `json:"disable_lets_encrypt_dns_records,omitempty"`
 	ValidateOnly                 bool             `json:"validate_only,omitempty"`
 	ProjectID                    string           `json:"project_id,omitempty"`
@@ -73,6 +85,8 @@ type LoadBalancer struct {
 	GLBSettings                  *GLBSettings     `json:"glb_settings,omitempty"`
 	TargetLoadBalancerIDs        []string         `json:"target_load_balancer_ids,omitempty"`
 	Network                      string           `json:"network,omitempty"`
+	NetworkStack                 string           `json:"network_stack,omitempty"`
+	TLSCipherPolicy              string           `json:"tls_cipher_policy,omitempty"`
 }
 
 // String creates a human-readable description of a LoadBalancer.
@@ -101,12 +115,15 @@ func (l LoadBalancer) AsRequest() *LoadBalancerRequest {
 		EnableProxyProtocol:          l.EnableProxyProtocol,
 		EnableBackendKeepalive:       l.EnableBackendKeepalive,
 		VPCUUID:                      l.VPCUUID,
+		VPCSubnetUUID:                l.VPCSubnetUUID,
 		DisableLetsEncryptDNSRecords: l.DisableLetsEncryptDNSRecords,
 		ValidateOnly:                 l.ValidateOnly,
 		ProjectID:                    l.ProjectID,
 		HTTPIdleTimeoutSeconds:       l.HTTPIdleTimeoutSeconds,
 		TargetLoadBalancerIDs:        append([]string(nil), l.TargetLoadBalancerIDs...),
 		Network:                      l.Network,
+		NetworkStack:                 l.NetworkStack,
+		TLSCipherPolicy:              l.TLSCipherPolicy,
 	}
 
 	if l.DisableLetsEncryptDNSRecords != nil {
@@ -237,6 +254,7 @@ type LoadBalancerRequest struct {
 	EnableProxyProtocol          bool             `json:"enable_proxy_protocol,omitempty"`
 	EnableBackendKeepalive       bool             `json:"enable_backend_keepalive,omitempty"`
 	VPCUUID                      string           `json:"vpc_uuid,omitempty"`
+	VPCSubnetUUID                string           `json:"subnet_uuid,omitempty"`
 	DisableLetsEncryptDNSRecords *bool            `json:"disable_lets_encrypt_dns_records,omitempty"`
 	ValidateOnly                 bool             `json:"validate_only,omitempty"`
 	ProjectID                    string           `json:"project_id,omitempty"`
@@ -246,6 +264,11 @@ type LoadBalancerRequest struct {
 	GLBSettings                  *GLBSettings     `json:"glb_settings,omitempty"`
 	TargetLoadBalancerIDs        []string         `json:"target_load_balancer_ids,omitempty"`
 	Network                      string           `json:"network,omitempty"`
+	NetworkStack                 string           `json:"network_stack,omitempty"`
+	TLSCipherPolicy              string           `json:"tls_cipher_policy,omitempty"`
+	// IP is an optional BYOIP address to assign on create. When omitted, a
+	// system-allocated floating IP is provisioned. Create-only; not used on update.
+	IP string `json:"ip,omitempty"`
 }
 
 // String creates a human-readable description of a LoadBalancerRequest.
@@ -379,6 +402,72 @@ func (l *LoadBalancersServiceOp) List(ctx context.Context, opt *ListOptions) ([]
 	if err != nil {
 		return nil, nil, err
 	}
+
+	root := new(loadBalancersRoot)
+	resp, err := l.client.Do(ctx, req, root)
+	if err != nil {
+		return nil, resp, err
+	}
+	if l := root.Links; l != nil {
+		resp.Links = l
+	}
+	if m := root.Meta; m != nil {
+		resp.Meta = m
+	}
+
+	return root.LoadBalancers, resp, err
+}
+
+// ListByNames lists load balancers filtered by resource names, with optional pagination.
+func (l *LoadBalancersServiceOp) ListByNames(ctx context.Context, names []string, opt *ListOptions) ([]LoadBalancer, *Response, error) {
+	path, err := addOptions(loadBalancersBasePath, opt)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	req, err := l.client.NewRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	q := req.URL.Query()
+	for _, name := range names {
+		q.Add("names", name)
+	}
+	req.URL.RawQuery = q.Encode()
+
+	root := new(loadBalancersRoot)
+	resp, err := l.client.Do(ctx, req, root)
+	if err != nil {
+		return nil, resp, err
+	}
+	if l := root.Links; l != nil {
+		resp.Links = l
+	}
+	if m := root.Meta; m != nil {
+		resp.Meta = m
+	}
+
+	return root.LoadBalancers, resp, err
+}
+
+// ListByUUIDs lists load balancers filtered by resource UUIDs, with optional pagination.
+func (l *LoadBalancersServiceOp) ListByUUIDs(ctx context.Context, uuids []string, opt *ListOptions) ([]LoadBalancer, *Response, error) {
+	path, err := addOptions(loadBalancersBasePath, opt)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	req, err := l.client.NewRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	q := req.URL.Query()
+	for _, uuid := range uuids {
+		q.Add("uuids", uuid)
+	}
+	req.URL.RawQuery = q.Encode()
 
 	root := new(loadBalancersRoot)
 	resp, err := l.client.Do(ctx, req, root)

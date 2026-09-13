@@ -26,7 +26,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/kops/pkg/apis/kops"
 )
 
 func SetString(target interface{}, targetPath string, newValue string) error {
@@ -55,6 +54,23 @@ func SetString(target interface{}, targetPath string, newValue string) error {
 
 			fieldSet = true
 			return nil
+		}
+
+		// Partial match, append the next explicitly indexed slice element.
+		if v.Kind() == reflect.Slice {
+			if len(targetFieldPath.elements) > len(path.elements) {
+				next := targetFieldPath.elements[len(path.elements)]
+				if next.Type == FieldPathElementTypeArrayIndex && next.number == v.Len() {
+					if !v.CanSet() {
+						return fmt.Errorf("cannot set field %q (marked immutable)", path)
+					}
+
+					newLen := v.Len() + 1
+					grown := reflect.MakeSlice(v.Type(), newLen, newLen)
+					reflect.Copy(grown, v)
+					v.Set(grown)
+				}
+			}
 		}
 
 		// Partial match, check for nil struct and auto-populate
@@ -148,6 +164,19 @@ func setType(v reflect.Value, newValue string) error {
 			name, value, _ := strings.Cut(newValue, "=")
 			v.SetMapIndex(reflect.ValueOf(name), reflect.ValueOf(intstr.Parse(value)))
 
+		case "map[string][]string":
+			name, value, _ := strings.Cut(newValue, "=")
+			tokens := strings.Split(value, ",")
+			valueArray := reflect.MakeSlice(reflect.TypeOf(tokens), 0, v.Len()+len(tokens))
+			for _, s := range tokens {
+				valueItem := reflect.New(reflect.TypeOf(s))
+				if err := setType(valueItem.Elem(), s); err != nil {
+					return err
+				}
+				valueArray = reflect.Append(valueArray, valueItem.Elem())
+			}
+			v.SetMapIndex(reflect.ValueOf(name), valueArray)
+
 		default:
 			return fmt.Errorf("unhandled type %q", t)
 		}
@@ -169,21 +198,32 @@ func setType(v reflect.Value, newValue string) error {
 		newV = reflect.ValueOf(b)
 
 	case "int64", "int32", "int16", "int":
-		v, err := strconv.Atoi(newValue)
-		if err != nil {
-			return fmt.Errorf("cannot interpret %q value as integer", newValue)
-		}
-
 		switch t {
 		case "int":
+			v, err := strconv.Atoi(newValue)
+			if err != nil {
+				return fmt.Errorf("cannot interpret %q value as integer", newValue)
+			}
 			newV = reflect.ValueOf(v)
 		case "int16":
+			v, err := strconv.ParseInt(newValue, 10, 16)
+			if err != nil {
+				return fmt.Errorf("cannot interpret %q value as int16", newValue)
+			}
 			v16 := int16(v)
 			newV = reflect.ValueOf(v16)
 		case "int32":
+			v, err := strconv.ParseInt(newValue, 10, 32)
+			if err != nil {
+				return fmt.Errorf("cannot interpret %q value as int32", newValue)
+			}
 			v32 := int32(v)
 			newV = reflect.ValueOf(v32)
 		case "int64":
+			v, err := strconv.ParseInt(newValue, 10, 64)
+			if err != nil {
+				return fmt.Errorf("cannot interpret %q value as int64", newValue)
+			}
 			v64 := int64(v)
 			newV = reflect.ValueOf(v64)
 		default:
@@ -216,14 +256,24 @@ func setType(v reflect.Value, newValue string) error {
 		newV = reflect.ValueOf(intstr.Parse(newValue))
 
 	case "kops.EnvVar":
-		name, value, found := strings.Cut(newValue, "=")
-		envVar := kops.EnvVar{
-			Name: name,
+		newV = reflect.New(v.Type()).Elem()
+
+		envVarType := newV.Type()
+
+		fdName, found := envVarType.FieldByName("Name")
+		if !found {
+			return fmt.Errorf("field Name not found in %T", newV.Interface())
 		}
-		if found {
-			envVar.Value = value
+		fdValue, found := envVarType.FieldByName("Value")
+		if !found {
+			return fmt.Errorf("field Value not found in %T", newV.Interface())
 		}
-		newV = reflect.ValueOf(envVar)
+
+		name, value, hasValue := strings.Cut(newValue, "=")
+		newV.FieldByIndex(fdName.Index).SetString(name)
+		if hasValue {
+			newV.FieldByIndex(fdValue.Index).SetString(value)
+		}
 
 	case "v1.Duration":
 		duration, err := time.ParseDuration(newValue)

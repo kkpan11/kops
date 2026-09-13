@@ -4,11 +4,8 @@ package ec2
 
 import (
 	"context"
-	"fmt"
-	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/smithy-go/middleware"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
 	"time"
 )
 
@@ -18,6 +15,22 @@ import (
 // settings, Availability Zone, or tenancy. If you need to modify any of these
 // attributes, we recommend that you cancel the Capacity Reservation, and then
 // create a new one with the required attributes. For more information, see [Modify an active Capacity Reservation].
+//
+// The allowed modifications depend on the state of the Capacity Reservation:
+//
+//   - assessing or scheduled state - You can modify the tags only.
+//
+//   - pending state - You can't modify the Capacity Reservation in any way.
+//
+//   - active state but still within the commitment duration - You can't decrease
+//     the instance count or set an end date that is within the commitment duration.
+//     All other modifications are allowed.
+//
+//   - active state with no commitment duration or elapsed commitment duration -
+//     All modifications are allowed.
+//
+//   - expired , cancelled , unsupported , or failed state - You can't modify the
+//     Capacity Reservation in any way.
 //
 // [Modify an active Capacity Reservation]: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/capacity-reservations-modify.html
 func (c *Client) ModifyCapacityReservation(ctx context.Context, params *ModifyCapacityReservationInput, optFns ...func(*Options)) (*ModifyCapacityReservationOutput, error) {
@@ -107,9 +120,6 @@ type ModifyCapacityReservationOutput struct {
 }
 
 func (c *Client) addOperationModifyCapacityReservationMiddlewares(stack *middleware.Stack, options Options) (err error) {
-	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
-		return err
-	}
 	err = stack.Serialize.Add(&awsEc2query_serializeOpModifyCapacityReservation{}, middleware.After)
 	if err != nil {
 		return err
@@ -118,19 +128,7 @@ func (c *Client) addOperationModifyCapacityReservationMiddlewares(stack *middlew
 	if err != nil {
 		return err
 	}
-	if err := addProtocolFinalizerMiddlewares(stack, options, "ModifyCapacityReservation"); err != nil {
-		return fmt.Errorf("add protocol finalizers: %v", err)
-	}
 
-	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
-		return err
-	}
-	if err = addSetLoggerMiddleware(stack, options); err != nil {
-		return err
-	}
-	if err = addClientRequestID(stack); err != nil {
-		return err
-	}
 	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
@@ -140,40 +138,13 @@ func (c *Client) addOperationModifyCapacityReservationMiddlewares(stack *middlew
 	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetry(stack, options); err != nil {
+	if err = addRecordResponseTiming(stack, options); err != nil {
 		return err
 	}
-	if err = addRawResponseToMetadata(stack); err != nil {
-		return err
-	}
-	if err = addRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack, options); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addTimeOffsetBuild(stack, c); err != nil {
-		return err
-	}
-	if err = addUserAgentRetryMode(stack, options); err != nil {
+	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
 	if err = addOpModifyCapacityReservationValidationMiddleware(stack); err != nil {
-		return err
-	}
-	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opModifyCapacityReservation(options.Region), middleware.Before); err != nil {
-		return err
-	}
-	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -188,13 +159,8 @@ func (c *Client) addOperationModifyCapacityReservationMiddlewares(stack *middlew
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
-	return nil
-}
-
-func newServiceMetadataMiddleware_opModifyCapacityReservation(region string) *awsmiddleware.RegisterServiceMetadata {
-	return &awsmiddleware.RegisterServiceMetadata{
-		Region:        region,
-		ServiceID:     ServiceID,
-		OperationName: "ModifyCapacityReservation",
+	if err = addInterceptors(stack, options); err != nil {
+		return err
 	}
+	return nil
 }

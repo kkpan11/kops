@@ -58,7 +58,13 @@ type gvrNamespace struct {
 }
 
 func (d *gvrNamespace) String() string {
-	return path.Join(d.namespace, d.gvr.Resource)
+	var gr string
+	if d.gvr.Group == "" {
+		gr = d.gvr.Resource
+	} else {
+		gr = fmt.Sprintf("%v.%v", d.gvr.Group, d.gvr.Resource)
+	}
+	return path.Join(d.namespace, gr)
 }
 
 type resourceDumper struct {
@@ -105,7 +111,10 @@ func (d *resourceDumper) DumpResources(ctx context.Context) error {
 	}
 
 	resourceLists, err := discoveryClient.ServerPreferredResources()
-	if err != nil {
+	var discoveryErr *discovery.ErrGroupDiscoveryFailed
+	if errors.As(err, &discoveryErr) {
+		klog.Warningf("using incomplete list of API groups: %v", discoveryErr)
+	} else if err != nil {
 		return fmt.Errorf("listing server preferred resources: %w", err)
 	}
 
@@ -256,8 +265,7 @@ func (d *resourceDumper) dumpGVRNamespaces(ctx context.Context, jobs chan gvrNam
 }
 
 func maskObject(obj runtime.Object) error {
-	switch obj.GetObjectKind().GroupVersionKind() {
-	case schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Secret"}:
+	if obj.GetObjectKind().GroupVersionKind() == (schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Secret"}) {
 		unstructuredObj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
 		if err != nil {
 			return err

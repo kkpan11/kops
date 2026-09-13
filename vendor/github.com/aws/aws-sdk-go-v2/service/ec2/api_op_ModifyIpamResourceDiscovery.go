@@ -4,11 +4,8 @@ package ec2
 
 import (
 	"context"
-	"fmt"
-	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/smithy-go/middleware"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
 // Modifies a resource discovery. A resource discovery is an IPAM component that
@@ -41,6 +38,21 @@ type ModifyIpamResourceDiscoveryInput struct {
 	// select as operating Regions.
 	AddOperatingRegions []types.AddIpamOperatingRegion
 
+	// Add an Organizational Unit (OU) exclusion to your IPAM. If your IPAM is
+	// integrated with Amazon Web Services Organizations and you add an organizational
+	// unit (OU) exclusion, IPAM will not manage the IP addresses in accounts in that
+	// OU exclusion. There is a limit on the number of exclusions you can create. For
+	// more information, see [Quotas for your IPAM]in the Amazon VPC IPAM User Guide.
+	//
+	// The resulting set of exclusions must not result in "overlap", meaning two or
+	// more OU exclusions must not exclude the same OU. For more information and
+	// examples, see the Amazon Web Services CLI request process in [Add or remove OU exclusions]in the Amazon VPC
+	// User Guide.
+	//
+	// [Quotas for your IPAM]: https://docs.aws.amazon.com/vpc/latest/ipam/quotas-ipam.html
+	// [Add or remove OU exclusions]: https://docs.aws.amazon.com/vpc/latest/ipam/exclude-ous.html#exclude-ous-create-delete
+	AddOrganizationalUnitExclusions []types.AddIpamOrganizationalUnitExclusion
+
 	// A resource discovery description.
 	Description *string
 
@@ -52,6 +64,21 @@ type ModifyIpamResourceDiscoveryInput struct {
 
 	// Remove operating Regions.
 	RemoveOperatingRegions []types.RemoveIpamOperatingRegion
+
+	// Remove an Organizational Unit (OU) exclusion to your IPAM. If your IPAM is
+	// integrated with Amazon Web Services Organizations and you add an organizational
+	// unit (OU) exclusion, IPAM will not manage the IP addresses in accounts in that
+	// OU exclusion. There is a limit on the number of exclusions you can create. For
+	// more information, see [Quotas for your IPAM]in the Amazon VPC IPAM User Guide.
+	//
+	// The resulting set of exclusions must not result in "overlap", meaning two or
+	// more OU exclusions must not exclude the same OU. For more information and
+	// examples, see the Amazon Web Services CLI request process in [Add or remove OU exclusions]in the Amazon VPC
+	// User Guide.
+	//
+	// [Quotas for your IPAM]: https://docs.aws.amazon.com/vpc/latest/ipam/quotas-ipam.html
+	// [Add or remove OU exclusions]: https://docs.aws.amazon.com/vpc/latest/ipam/exclude-ous.html#exclude-ous-create-delete
+	RemoveOrganizationalUnitExclusions []types.RemoveIpamOrganizationalUnitExclusion
 
 	noSmithyDocumentSerde
 }
@@ -68,9 +95,6 @@ type ModifyIpamResourceDiscoveryOutput struct {
 }
 
 func (c *Client) addOperationModifyIpamResourceDiscoveryMiddlewares(stack *middleware.Stack, options Options) (err error) {
-	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
-		return err
-	}
 	err = stack.Serialize.Add(&awsEc2query_serializeOpModifyIpamResourceDiscovery{}, middleware.After)
 	if err != nil {
 		return err
@@ -79,19 +103,7 @@ func (c *Client) addOperationModifyIpamResourceDiscoveryMiddlewares(stack *middl
 	if err != nil {
 		return err
 	}
-	if err := addProtocolFinalizerMiddlewares(stack, options, "ModifyIpamResourceDiscovery"); err != nil {
-		return fmt.Errorf("add protocol finalizers: %v", err)
-	}
 
-	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
-		return err
-	}
-	if err = addSetLoggerMiddleware(stack, options); err != nil {
-		return err
-	}
-	if err = addClientRequestID(stack); err != nil {
-		return err
-	}
 	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
@@ -101,40 +113,13 @@ func (c *Client) addOperationModifyIpamResourceDiscoveryMiddlewares(stack *middl
 	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetry(stack, options); err != nil {
+	if err = addRecordResponseTiming(stack, options); err != nil {
 		return err
 	}
-	if err = addRawResponseToMetadata(stack); err != nil {
-		return err
-	}
-	if err = addRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack, options); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addTimeOffsetBuild(stack, c); err != nil {
-		return err
-	}
-	if err = addUserAgentRetryMode(stack, options); err != nil {
+	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
 	if err = addOpModifyIpamResourceDiscoveryValidationMiddleware(stack); err != nil {
-		return err
-	}
-	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opModifyIpamResourceDiscovery(options.Region), middleware.Before); err != nil {
-		return err
-	}
-	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -149,13 +134,8 @@ func (c *Client) addOperationModifyIpamResourceDiscoveryMiddlewares(stack *middl
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
-	return nil
-}
-
-func newServiceMetadataMiddleware_opModifyIpamResourceDiscovery(region string) *awsmiddleware.RegisterServiceMetadata {
-	return &awsmiddleware.RegisterServiceMetadata{
-		Region:        region,
-		ServiceID:     ServiceID,
-		OperationName: "ModifyIpamResourceDiscovery",
+	if err = addInterceptors(stack, options); err != nil {
+		return err
 	}
+	return nil
 }

@@ -6,14 +6,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/service/elasticloadbalancing/types"
 	smithy "github.com/aws/smithy-go"
 	"github.com/aws/smithy-go/middleware"
 	smithytime "github.com/aws/smithy-go/time"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
 	smithywaiter "github.com/aws/smithy-go/waiter"
-	jmespath "github.com/jmespath/go-jmespath"
 	"time"
 )
 
@@ -64,9 +61,6 @@ type DescribeInstanceHealthOutput struct {
 }
 
 func (c *Client) addOperationDescribeInstanceHealthMiddlewares(stack *middleware.Stack, options Options) (err error) {
-	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
-		return err
-	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpDescribeInstanceHealth{}, middleware.After)
 	if err != nil {
 		return err
@@ -75,19 +69,7 @@ func (c *Client) addOperationDescribeInstanceHealthMiddlewares(stack *middleware
 	if err != nil {
 		return err
 	}
-	if err := addProtocolFinalizerMiddlewares(stack, options, "DescribeInstanceHealth"); err != nil {
-		return fmt.Errorf("add protocol finalizers: %v", err)
-	}
 
-	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
-		return err
-	}
-	if err = addSetLoggerMiddleware(stack, options); err != nil {
-		return err
-	}
-	if err = addClientRequestID(stack); err != nil {
-		return err
-	}
 	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
@@ -97,40 +79,13 @@ func (c *Client) addOperationDescribeInstanceHealthMiddlewares(stack *middleware
 	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetry(stack, options); err != nil {
+	if err = addRecordResponseTiming(stack, options); err != nil {
 		return err
 	}
-	if err = addRawResponseToMetadata(stack); err != nil {
-		return err
-	}
-	if err = addRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack, options); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addTimeOffsetBuild(stack, c); err != nil {
-		return err
-	}
-	if err = addUserAgentRetryMode(stack, options); err != nil {
+	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
 	if err = addOpDescribeInstanceHealthValidationMiddleware(stack); err != nil {
-		return err
-	}
-	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opDescribeInstanceHealth(options.Region), middleware.Before); err != nil {
-		return err
-	}
-	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -143,6 +98,9 @@ func (c *Client) addOperationDescribeInstanceHealthMiddlewares(stack *middleware
 		return err
 	}
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
+	if err = addInterceptors(stack, options); err != nil {
 		return err
 	}
 	return nil
@@ -310,29 +268,31 @@ func (w *AnyInstanceInServiceWaiter) WaitForOutput(ctx context.Context, params *
 func anyInstanceInServiceStateRetryable(ctx context.Context, input *DescribeInstanceHealthInput, output *DescribeInstanceHealthOutput, err error) (bool, error) {
 
 	if err == nil {
-		pathValue, err := jmespath.Search("InstanceStates[].State", output)
-		if err != nil {
-			return false, fmt.Errorf("error evaluating waiter state: %w", err)
+		v1 := output.InstanceStates
+		var v2 []string
+		for _, v := range v1 {
+			v3 := v.State
+			if v3 != nil {
+				v2 = append(v2, *v3)
+			}
 		}
-
 		expectedValue := "InService"
-		listOfValues, ok := pathValue.([]interface{})
-		if !ok {
-			return false, fmt.Errorf("waiter comparator expected list got %T", pathValue)
+		var match bool
+		for _, v := range v2 {
+			if string(v) == expectedValue {
+				match = true
+				break
+			}
 		}
 
-		for _, v := range listOfValues {
-			value, ok := v.(*string)
-			if !ok {
-				return false, fmt.Errorf("waiter comparator expected *string value, got %T", pathValue)
-			}
-
-			if string(*value) == expectedValue {
-				return false, nil
-			}
+		if match {
+			return false, nil
 		}
 	}
 
+	if err != nil {
+		return false, err
+	}
 	return true, nil
 }
 
@@ -498,29 +458,20 @@ func (w *InstanceDeregisteredWaiter) WaitForOutput(ctx context.Context, params *
 func instanceDeregisteredStateRetryable(ctx context.Context, input *DescribeInstanceHealthInput, output *DescribeInstanceHealthOutput, err error) (bool, error) {
 
 	if err == nil {
-		pathValue, err := jmespath.Search("InstanceStates[].State", output)
-		if err != nil {
-			return false, fmt.Errorf("error evaluating waiter state: %w", err)
-		}
-
-		expectedValue := "OutOfService"
-		var match = true
-		listOfValues, ok := pathValue.([]interface{})
-		if !ok {
-			return false, fmt.Errorf("waiter comparator expected list got %T", pathValue)
-		}
-
-		if len(listOfValues) == 0 {
-			match = false
-		}
-		for _, v := range listOfValues {
-			value, ok := v.(*string)
-			if !ok {
-				return false, fmt.Errorf("waiter comparator expected *string value, got %T", pathValue)
+		v1 := output.InstanceStates
+		var v2 []string
+		for _, v := range v1 {
+			v3 := v.State
+			if v3 != nil {
+				v2 = append(v2, *v3)
 			}
-
-			if string(*value) != expectedValue {
+		}
+		expectedValue := "OutOfService"
+		match := len(v2) > 0
+		for _, v := range v2 {
+			if string(v) != expectedValue {
 				match = false
+				break
 			}
 		}
 
@@ -541,6 +492,9 @@ func instanceDeregisteredStateRetryable(ctx context.Context, input *DescribeInst
 		}
 	}
 
+	if err != nil {
+		return false, err
+	}
 	return true, nil
 }
 
@@ -704,29 +658,20 @@ func (w *InstanceInServiceWaiter) WaitForOutput(ctx context.Context, params *Des
 func instanceInServiceStateRetryable(ctx context.Context, input *DescribeInstanceHealthInput, output *DescribeInstanceHealthOutput, err error) (bool, error) {
 
 	if err == nil {
-		pathValue, err := jmespath.Search("InstanceStates[].State", output)
-		if err != nil {
-			return false, fmt.Errorf("error evaluating waiter state: %w", err)
-		}
-
-		expectedValue := "InService"
-		var match = true
-		listOfValues, ok := pathValue.([]interface{})
-		if !ok {
-			return false, fmt.Errorf("waiter comparator expected list got %T", pathValue)
-		}
-
-		if len(listOfValues) == 0 {
-			match = false
-		}
-		for _, v := range listOfValues {
-			value, ok := v.(*string)
-			if !ok {
-				return false, fmt.Errorf("waiter comparator expected *string value, got %T", pathValue)
+		v1 := output.InstanceStates
+		var v2 []string
+		for _, v := range v1 {
+			v3 := v.State
+			if v3 != nil {
+				v2 = append(v2, *v3)
 			}
-
-			if string(*value) != expectedValue {
+		}
+		expectedValue := "InService"
+		match := len(v2) > 0
+		for _, v := range v2 {
+			if string(v) != expectedValue {
 				match = false
+				break
 			}
 		}
 
@@ -747,6 +692,9 @@ func instanceInServiceStateRetryable(ctx context.Context, input *DescribeInstanc
 		}
 	}
 
+	if err != nil {
+		return false, err
+	}
 	return true, nil
 }
 
@@ -757,11 +705,3 @@ type DescribeInstanceHealthAPIClient interface {
 }
 
 var _ DescribeInstanceHealthAPIClient = (*Client)(nil)
-
-func newServiceMetadataMiddleware_opDescribeInstanceHealth(region string) *awsmiddleware.RegisterServiceMetadata {
-	return &awsmiddleware.RegisterServiceMetadata{
-		Region:        region,
-		ServiceID:     ServiceID,
-		OperationName: "DescribeInstanceHealth",
-	}
-}

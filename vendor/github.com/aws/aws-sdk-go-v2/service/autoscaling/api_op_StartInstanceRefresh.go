@@ -4,11 +4,8 @@ package autoscaling
 
 import (
 	"context"
-	"fmt"
-	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/service/autoscaling/types"
 	"github.com/aws/smithy-go/middleware"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
 // Starts an instance refresh.
@@ -21,23 +18,27 @@ import (
 // instances in the group.
 //
 // If successful, the request's response contains a unique ID that you can use to
-// track the progress of the instance refresh. To query its status, call the DescribeInstanceRefreshesAPI.
-// To describe the instance refreshes that have already run, call the DescribeInstanceRefreshesAPI. To
-// cancel an instance refresh that is in progress, use the CancelInstanceRefreshAPI.
+// track the progress of the instance refresh. To query its status, call the [DescribeInstanceRefreshes]API.
+// To describe the instance refreshes that have already run, call the [DescribeInstanceRefreshes]API. To
+// cancel an instance refresh that is in progress, use the [CancelInstanceRefresh]API.
 //
 // An instance refresh might fail for several reasons, such as EC2 launch
 // failures, misconfigured health checks, or not ignoring or allowing the
 // termination of instances that are in Standby state or protected from scale in.
 // You can monitor for failed EC2 launches using the scaling activities. To find
-// the scaling activities, call the DescribeScalingActivitiesAPI.
+// the scaling activities, call the [DescribeScalingActivities]API.
 //
 // If you enable auto rollback, your Auto Scaling group will be rolled back
 // automatically when the instance refresh fails. You can enable this feature
 // before starting an instance refresh by specifying the AutoRollback property in
 // the instance refresh preferences. Otherwise, to roll back an instance refresh
-// before it finishes, use the RollbackInstanceRefreshAPI.
+// before it finishes, use the [RollbackInstanceRefresh]API.
 //
+// [DescribeScalingActivities]: https://docs.aws.amazon.com/autoscaling/ec2/APIReference/API_DescribeScalingActivities.html
 // [instance refresh feature]: https://docs.aws.amazon.com/autoscaling/ec2/userguide/asg-instance-refresh.html
+// [DescribeInstanceRefreshes]: https://docs.aws.amazon.com/autoscaling/ec2/APIReference/API_DescribeInstanceRefreshes.html
+// [CancelInstanceRefresh]: https://docs.aws.amazon.com/autoscaling/ec2/APIReference/API_CancelInstanceRefresh.html
+// [RollbackInstanceRefresh]: https://docs.aws.amazon.com/autoscaling/ec2/APIReference/API_RollbackInstanceRefresh.html
 func (c *Client) StartInstanceRefresh(ctx context.Context, params *StartInstanceRefreshInput, optFns ...func(*Options)) (*StartInstanceRefreshOutput, error) {
 	if params == nil {
 		params = &StartInstanceRefreshInput{}
@@ -87,9 +88,11 @@ type StartInstanceRefreshInput struct {
 	//   - CloudWatch alarms
 	//
 	//   - Skip matching
+	//
+	//   - Bake time
 	Preferences *types.RefreshPreferences
 
-	// The strategy to use for the instance refresh. The only valid value is Rolling .
+	// The strategy to use for the instance refresh. The default value is Rolling .
 	Strategy types.RefreshStrategy
 
 	noSmithyDocumentSerde
@@ -107,9 +110,6 @@ type StartInstanceRefreshOutput struct {
 }
 
 func (c *Client) addOperationStartInstanceRefreshMiddlewares(stack *middleware.Stack, options Options) (err error) {
-	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
-		return err
-	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpStartInstanceRefresh{}, middleware.After)
 	if err != nil {
 		return err
@@ -118,19 +118,7 @@ func (c *Client) addOperationStartInstanceRefreshMiddlewares(stack *middleware.S
 	if err != nil {
 		return err
 	}
-	if err := addProtocolFinalizerMiddlewares(stack, options, "StartInstanceRefresh"); err != nil {
-		return fmt.Errorf("add protocol finalizers: %v", err)
-	}
 
-	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
-		return err
-	}
-	if err = addSetLoggerMiddleware(stack, options); err != nil {
-		return err
-	}
-	if err = addClientRequestID(stack); err != nil {
-		return err
-	}
 	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
@@ -140,40 +128,13 @@ func (c *Client) addOperationStartInstanceRefreshMiddlewares(stack *middleware.S
 	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetry(stack, options); err != nil {
+	if err = addRecordResponseTiming(stack, options); err != nil {
 		return err
 	}
-	if err = addRawResponseToMetadata(stack); err != nil {
-		return err
-	}
-	if err = addRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack, options); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addTimeOffsetBuild(stack, c); err != nil {
-		return err
-	}
-	if err = addUserAgentRetryMode(stack, options); err != nil {
+	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
 	if err = addOpStartInstanceRefreshValidationMiddleware(stack); err != nil {
-		return err
-	}
-	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opStartInstanceRefresh(options.Region), middleware.Before); err != nil {
-		return err
-	}
-	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -188,13 +149,8 @@ func (c *Client) addOperationStartInstanceRefreshMiddlewares(stack *middleware.S
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
-	return nil
-}
-
-func newServiceMetadataMiddleware_opStartInstanceRefresh(region string) *awsmiddleware.RegisterServiceMetadata {
-	return &awsmiddleware.RegisterServiceMetadata{
-		Region:        region,
-		ServiceID:     ServiceID,
-		OperationName: "StartInstanceRefresh",
+	if err = addInterceptors(stack, options); err != nil {
+		return err
 	}
+	return nil
 }

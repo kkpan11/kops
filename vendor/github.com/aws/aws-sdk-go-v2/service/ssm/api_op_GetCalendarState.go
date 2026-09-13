@@ -4,11 +4,8 @@ package ssm
 
 import (
 	"context"
-	"fmt"
-	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/service/ssm/types"
 	"github.com/aws/smithy-go/middleware"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
 // Gets the state of a Amazon Web Services Systems Manager change calendar at the
@@ -22,7 +19,7 @@ import (
 // status of OPEN only if all calendars in the request are open. If one or more
 // calendars in the request are closed, the status returned is CLOSED .
 //
-// For more information about Change Calendar, a capability of Amazon Web Services
+// For more information about Change Calendar, a tool in Amazon Web Services
 // Systems Manager, see [Amazon Web Services Systems Manager Change Calendar]in the Amazon Web Services Systems Manager User Guide.
 //
 // [Amazon Web Services Systems Manager Change Calendar]: https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-change-calendar.html
@@ -43,7 +40,7 @@ func (c *Client) GetCalendarState(ctx context.Context, params *GetCalendarStateI
 
 type GetCalendarStateInput struct {
 
-	// The names or Amazon Resource Names (ARNs) of the Systems Manager documents (SSM
+	// The names of Amazon Resource Names (ARNs) of the Systems Manager documents (SSM
 	// documents) that represent the calendar entries for which you want to get the
 	// state.
 	//
@@ -87,9 +84,6 @@ type GetCalendarStateOutput struct {
 }
 
 func (c *Client) addOperationGetCalendarStateMiddlewares(stack *middleware.Stack, options Options) (err error) {
-	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
-		return err
-	}
 	err = stack.Serialize.Add(&awsAwsjson11_serializeOpGetCalendarState{}, middleware.After)
 	if err != nil {
 		return err
@@ -98,19 +92,7 @@ func (c *Client) addOperationGetCalendarStateMiddlewares(stack *middleware.Stack
 	if err != nil {
 		return err
 	}
-	if err := addProtocolFinalizerMiddlewares(stack, options, "GetCalendarState"); err != nil {
-		return fmt.Errorf("add protocol finalizers: %v", err)
-	}
 
-	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
-		return err
-	}
-	if err = addSetLoggerMiddleware(stack, options); err != nil {
-		return err
-	}
-	if err = addClientRequestID(stack); err != nil {
-		return err
-	}
 	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
@@ -120,40 +102,13 @@ func (c *Client) addOperationGetCalendarStateMiddlewares(stack *middleware.Stack
 	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetry(stack, options); err != nil {
+	if err = addRecordResponseTiming(stack, options); err != nil {
 		return err
 	}
-	if err = addRawResponseToMetadata(stack); err != nil {
-		return err
-	}
-	if err = addRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack, options); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addTimeOffsetBuild(stack, c); err != nil {
-		return err
-	}
-	if err = addUserAgentRetryMode(stack, options); err != nil {
+	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
 	if err = addOpGetCalendarStateValidationMiddleware(stack); err != nil {
-		return err
-	}
-	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opGetCalendarState(options.Region), middleware.Before); err != nil {
-		return err
-	}
-	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -168,13 +123,8 @@ func (c *Client) addOperationGetCalendarStateMiddlewares(stack *middleware.Stack
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
-	return nil
-}
-
-func newServiceMetadataMiddleware_opGetCalendarState(region string) *awsmiddleware.RegisterServiceMetadata {
-	return &awsmiddleware.RegisterServiceMetadata{
-		Region:        region,
-		ServiceID:     ServiceID,
-		OperationName: "GetCalendarState",
+	if err = addInterceptors(stack, options); err != nil {
+		return err
 	}
+	return nil
 }

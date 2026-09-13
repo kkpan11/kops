@@ -4,11 +4,8 @@ package ssm
 
 import (
 	"context"
-	"fmt"
-	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/service/ssm/types"
 	"github.com/aws/smithy-go/middleware"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
 // A resource data sync helps you view data from multiple sources in a single
@@ -18,7 +15,7 @@ import (
 // You can configure Systems Manager Inventory to use the SyncToDestination type
 // to synchronize Inventory data from multiple Amazon Web Services Regions to a
 // single Amazon Simple Storage Service (Amazon S3) bucket. For more information,
-// see [Configuring resource data sync for Inventory]in the Amazon Web Services Systems Manager User Guide.
+// see [Creating a resource data sync for Inventory]in the Amazon Web Services Systems Manager User Guide.
 //
 // You can configure Systems Manager Explorer to use the SyncFromSource type to
 // synchronize operational work items (OpsItems) and operational data (OpsData)
@@ -38,7 +35,7 @@ import (
 // policy.
 //
 // [Setting up Systems Manager Explorer to display data from multiple accounts and Regions]: https://docs.aws.amazon.com/systems-manager/latest/userguide/Explorer-resource-data-sync.html
-// [Configuring resource data sync for Inventory]: https://docs.aws.amazon.com/systems-manager/latest/userguide/sysman-inventory-datasync.html
+// [Creating a resource data sync for Inventory]: https://docs.aws.amazon.com/systems-manager/latest/userguide/inventory-create-resource-data-sync.html
 func (c *Client) CreateResourceDataSync(ctx context.Context, params *CreateResourceDataSyncInput, optFns ...func(*Options)) (*CreateResourceDataSyncOutput, error) {
 	if params == nil {
 		params = &CreateResourceDataSyncInput{}
@@ -89,9 +86,6 @@ type CreateResourceDataSyncOutput struct {
 }
 
 func (c *Client) addOperationCreateResourceDataSyncMiddlewares(stack *middleware.Stack, options Options) (err error) {
-	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
-		return err
-	}
 	err = stack.Serialize.Add(&awsAwsjson11_serializeOpCreateResourceDataSync{}, middleware.After)
 	if err != nil {
 		return err
@@ -100,19 +94,7 @@ func (c *Client) addOperationCreateResourceDataSyncMiddlewares(stack *middleware
 	if err != nil {
 		return err
 	}
-	if err := addProtocolFinalizerMiddlewares(stack, options, "CreateResourceDataSync"); err != nil {
-		return fmt.Errorf("add protocol finalizers: %v", err)
-	}
 
-	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
-		return err
-	}
-	if err = addSetLoggerMiddleware(stack, options); err != nil {
-		return err
-	}
-	if err = addClientRequestID(stack); err != nil {
-		return err
-	}
 	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
@@ -122,40 +104,13 @@ func (c *Client) addOperationCreateResourceDataSyncMiddlewares(stack *middleware
 	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetry(stack, options); err != nil {
+	if err = addRecordResponseTiming(stack, options); err != nil {
 		return err
 	}
-	if err = addRawResponseToMetadata(stack); err != nil {
-		return err
-	}
-	if err = addRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack, options); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addTimeOffsetBuild(stack, c); err != nil {
-		return err
-	}
-	if err = addUserAgentRetryMode(stack, options); err != nil {
+	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
 	if err = addOpCreateResourceDataSyncValidationMiddleware(stack); err != nil {
-		return err
-	}
-	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opCreateResourceDataSync(options.Region), middleware.Before); err != nil {
-		return err
-	}
-	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -170,13 +125,8 @@ func (c *Client) addOperationCreateResourceDataSyncMiddlewares(stack *middleware
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
-	return nil
-}
-
-func newServiceMetadataMiddleware_opCreateResourceDataSync(region string) *awsmiddleware.RegisterServiceMetadata {
-	return &awsmiddleware.RegisterServiceMetadata{
-		Region:        region,
-		ServiceID:     ServiceID,
-		OperationName: "CreateResourceDataSync",
+	if err = addInterceptors(stack, options); err != nil {
+		return err
 	}
+	return nil
 }

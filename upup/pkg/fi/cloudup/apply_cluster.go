@@ -25,6 +25,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/blang/semver/v4"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
@@ -40,6 +41,7 @@ import (
 	"k8s.io/kops/pkg/model"
 	"k8s.io/kops/pkg/model/awsmodel"
 	"k8s.io/kops/pkg/model/azuremodel"
+	"k8s.io/kops/pkg/model/components/channels"
 	"k8s.io/kops/pkg/model/components/etcdmanager"
 	"k8s.io/kops/pkg/model/components/kubeapiserver"
 	"k8s.io/kops/pkg/model/components/kubescheduler"
@@ -47,9 +49,11 @@ import (
 	"k8s.io/kops/pkg/model/gcemodel"
 	"k8s.io/kops/pkg/model/hetznermodel"
 	"k8s.io/kops/pkg/model/iam"
+	"k8s.io/kops/pkg/model/linodemodel"
 	"k8s.io/kops/pkg/model/openstackmodel"
 	"k8s.io/kops/pkg/model/scalewaymodel"
 	"k8s.io/kops/pkg/nodemodel"
+	"k8s.io/kops/pkg/predicates"
 	"k8s.io/kops/pkg/templates"
 	"k8s.io/kops/upup/models"
 	"k8s.io/kops/upup/pkg/fi"
@@ -59,6 +63,8 @@ import (
 	"k8s.io/kops/upup/pkg/fi/cloudup/do"
 	"k8s.io/kops/upup/pkg/fi/cloudup/gce"
 	"k8s.io/kops/upup/pkg/fi/cloudup/hetzner"
+	"k8s.io/kops/upup/pkg/fi/cloudup/linode"
+	"k8s.io/kops/upup/pkg/fi/cloudup/metal"
 	"k8s.io/kops/upup/pkg/fi/cloudup/openstack"
 	"k8s.io/kops/upup/pkg/fi/cloudup/scaleway"
 	"k8s.io/kops/upup/pkg/fi/cloudup/terraform"
@@ -70,14 +76,15 @@ const (
 	starline = "*********************************************************************************"
 
 	// OldestSupportedKubernetesVersion is the oldest kubernetes version that is supported in kOps.
-	OldestSupportedKubernetesVersion = "1.25.0"
+	OldestSupportedKubernetesVersion = "1.32.0"
 	// OldestRecommendedKubernetesVersion is the oldest kubernetes version that is not deprecated in kOps.
-	OldestRecommendedKubernetesVersion = "1.27.0"
+	OldestRecommendedKubernetesVersion = "1.34.0"
 )
 
 // TerraformCloudProviders is the list of cloud providers with terraform target support
 var TerraformCloudProviders = []kops.CloudProviderID{
 	kops.CloudProviderAWS,
+	kops.CloudProviderAzure,
 	kops.CloudProviderGCE,
 	kops.CloudProviderHetzner,
 	kops.CloudProviderScaleway,
@@ -91,7 +98,7 @@ type ApplyClusterCmd struct {
 	InstanceGroups []*kops.InstanceGroup
 
 	// TargetName specifies how we are operating e.g. direct to GCE, or AWS, or dry-run, or terraform
-	TargetName string
+	TargetName Target
 
 	// Target is the fi.Target we will operate against
 	Target fi.CloudupTarget
@@ -127,11 +134,17 @@ type ApplyClusterCmd struct {
 	// TaskMap is the map of tasks that we built (output)
 	TaskMap map[string]fi.CloudupTask
 
-	// AdditionalObjects holds cluster-asssociated configuration objects, other than the Cluster and InstanceGroups.
+	// AdditionalObjects holds cluster-associated configuration objects, other than the Cluster and InstanceGroups.
 	AdditionalObjects kubemanifest.ObjectList
 
 	// DeletionProcessing controls whether we process deletions.
 	DeletionProcessing fi.DeletionProcessingMode
+
+	// InstanceGroupFilter is a predicate that restricts which instance groups we will update.
+	InstanceGroupFilter predicates.Predicate[*kops.InstanceGroup]
+
+	// The current oldest version of control plane nodes, defaults to version defined in cluster spec if IgnoreVersionSkew was set
+	ControlPlaneRunningVersion string
 }
 
 // ApplyResults holds information about an ApplyClusterCmd operation.
@@ -152,8 +165,11 @@ func (c *ApplyClusterCmd) Run(ctx context.Context) (*ApplyResults, error) {
 		if !found {
 			return nil, fmt.Errorf("cloud provider %v does not support the terraform target", c.Cloud.ProviderID())
 		}
+		if c.Cloud.ProviderID() == kops.CloudProviderAzure && !featureflag.AzureTerraform.Enabled() {
+			return nil, fmt.Errorf("cloud provider Azure requires the AzureTerraform feature flag to enable the terraform target")
+		}
 		if c.Cloud.ProviderID() == kops.CloudProviderDO && !featureflag.DOTerraform.Enabled() {
-			return nil, fmt.Errorf("DO Terraform requires the DOTerraform feature flag to be enabled")
+			return nil, fmt.Errorf("cloud provider DigitalOcean requires the DOTerraform feature flag to enable the terraform target")
 		}
 	}
 	if c.InstanceGroups == nil {
@@ -227,13 +243,15 @@ func (c *ApplyClusterCmd) Run(ctx context.Context) (*ApplyResults, error) {
 	default:
 		return nil, fmt.Errorf("unknown phase %q", c.Phase)
 	}
-	if c.GetAssets {
-		networkLifecycle = fi.LifecycleIgnore
-		securityLifecycle = fi.LifecycleIgnore
-		clusterLifecycle = fi.LifecycleIgnore
-	}
 
-	assetBuilder := assets.NewAssetBuilder(c.Clientset.VFSContext(), c.Cluster.Spec.Assets, c.Cluster.Spec.KubernetesVersion, c.GetAssets)
+	assetBuilder := assets.NewAssetBuilder(c.Clientset.VFSContext(), c.Cluster.Spec.Assets, c.GetAssets)
+	// Use HasSuffix for CI builds where the cluster spec contains a GCS url like
+	// https://storage.googleapis.com/k8s-release-dev/ci/v1.36.0-alpha.0.615+cc55e3447816e4
+	// and ControlPlaneRunningVersion is a build like v1.36.0-alpha.0.615+cc55e3447816e4
+	// Release versions will be an exact match
+	if len(c.ControlPlaneRunningVersion) > 0 && !strings.HasSuffix(c.Cluster.Spec.KubernetesVersion, c.ControlPlaneRunningVersion) {
+		assetBuilder.KubeletSupportedVersion = c.ControlPlaneRunningVersion
+	}
 	err = c.upgradeSpecs(ctx, assetBuilder)
 	if err != nil {
 		return nil, err
@@ -380,11 +398,6 @@ func (c *ApplyClusterCmd) Run(ctx context.Context) (*ApplyResults, error) {
 		}
 	}
 
-	fileAssets := &nodemodel.FileAssets{Cluster: cluster}
-	if err := fileAssets.AddFileAssets(assetBuilder); err != nil {
-		return nil, err
-	}
-
 	project := ""
 	scwZone := ""
 
@@ -400,9 +413,13 @@ func (c *ApplyClusterCmd) Run(ctx context.Context) (*ApplyResults, error) {
 		}
 	}
 
+	allInstanceGroups := c.InstanceGroups
+	filteredInstanceGroups := predicates.Filter(allInstanceGroups, c.InstanceGroupFilter)
+
 	modelContext := &model.KopsModelContext{
 		IAMModelContext:   iam.IAMModelContext{Cluster: cluster},
-		InstanceGroups:    c.InstanceGroups,
+		InstanceGroups:    filteredInstanceGroups,
+		AllInstanceGroups: allInstanceGroups,
 		AdditionalObjects: c.AdditionalObjects,
 	}
 
@@ -482,6 +499,16 @@ func (c *ApplyClusterCmd) Run(ctx context.Context) (*ApplyResults, error) {
 			scwZone = scwCloud.Zone()
 		}
 
+	case kops.CloudProviderLinode:
+		{
+			if !featureflag.Linode.Enabled() {
+				return nil, fmt.Errorf("Akamai (Linode) support is currently alpha, and is feature-gated. Please export KOPS_FEATURE_FLAGS=Linode")
+			}
+		}
+
+	case kops.CloudProviderMetal:
+		// Metal is a special case, we don't need to do anything here (yet)
+
 	default:
 		return nil, fmt.Errorf("unknown CloudProvider %q", cluster.GetCloudProvider())
 	}
@@ -496,12 +523,17 @@ func (c *ApplyClusterCmd) Run(ctx context.Context) (*ApplyResults, error) {
 		}
 	}
 
-	tf := &TemplateFunctions{
-		KopsModelContext: *modelContext,
-		cloud:            cloud,
+	addonRenderer := &addonTemplateRenderer{
+		modelContext: modelContext,
+		cloud:        cloud,
+		secretStore:  secretStore,
 	}
 
-	configBuilder, err := nodemodel.NewNodeUpConfigBuilder(cluster, assetBuilder, fileAssets.Assets, encryptionConfigSecretHash)
+	nodeUpAssets, err := nodemodel.BuildNodeUpAssets(ctx, assetBuilder)
+	if err != nil {
+		return nil, err
+	}
+	configBuilder, err := nodemodel.NewNodeUpConfigBuilder(cluster, assetBuilder, encryptionConfigSecretHash)
 	if err != nil {
 		return nil, err
 	}
@@ -509,18 +541,13 @@ func (c *ApplyClusterCmd) Run(ctx context.Context) (*ApplyResults, error) {
 		KopsModelContext:    modelContext,
 		Lifecycle:           clusterLifecycle,
 		NodeUpConfigBuilder: configBuilder,
-		NodeUpAssets:        fileAssets.NodeUpAssets,
+		NodeUpAssets:        nodeUpAssets.NodeUpAssets,
 	}
 
 	{
-		templates, err := templates.LoadTemplates(ctx, cluster, models.NewAssetPath("cloudup/resources"))
+		templates, err := templates.LoadTemplates(ctx, models.NewAssetPath("cloudup/resources"))
 		if err != nil {
 			return nil, fmt.Errorf("error loading templates: %v", err)
-		}
-
-		err = tf.AddTo(templates.TemplateFunctions, secretStore)
-		if err != nil {
-			return nil, err
 		}
 
 		bcb := bootstrapchannelbuilder.NewBootstrapChannelBuilder(
@@ -529,6 +556,7 @@ func (c *ApplyClusterCmd) Run(ctx context.Context) (*ApplyResults, error) {
 			assetBuilder,
 			templates,
 			addons,
+			addonRenderer,
 		)
 
 		l.Builders = append(l.Builders,
@@ -558,6 +586,11 @@ func (c *ApplyClusterCmd) Run(ctx context.Context) (*ApplyResults, error) {
 				KopsModelContext: modelContext,
 				Lifecycle:        clusterLifecycle,
 			},
+			&channels.ChannelsBuilder{
+				AssetBuilder:     assetBuilder,
+				KopsModelContext: modelContext,
+				Lifecycle:        clusterLifecycle,
+			},
 			&model.MasterVolumeBuilder{KopsModelContext: modelContext, Lifecycle: clusterLifecycle},
 			&model.ConfigBuilder{KopsModelContext: modelContext, Lifecycle: clusterLifecycle},
 		)
@@ -577,7 +610,7 @@ func (c *ApplyClusterCmd) Run(ctx context.Context) (*ApplyResults, error) {
 				&awsmodel.SSHKeyModelBuilder{AWSModelContext: awsModelContext, Lifecycle: securityLifecycle},
 				&awsmodel.NetworkModelBuilder{AWSModelContext: awsModelContext, Lifecycle: networkLifecycle},
 				&awsmodel.IAMModelBuilder{AWSModelContext: awsModelContext, Lifecycle: securityLifecycle, Cluster: cluster},
-				&awsmodel.OIDCProviderBuilder{AWSModelContext: awsModelContext, Lifecycle: securityLifecycle, KeyStore: keyStore},
+				&awsmodel.OIDCProviderBuilder{AWSModelContext: awsModelContext, Lifecycle: securityLifecycle},
 			)
 
 			awsModelBuilder := &awsmodel.AutoscalingGroupModelBuilder{
@@ -686,6 +719,18 @@ func (c *ApplyClusterCmd) Run(ctx context.Context) (*ApplyResults, error) {
 				&scalewaymodel.SSHKeyModelBuilder{ScwModelContext: scwModelContext, Lifecycle: securityLifecycle},
 			)
 
+		case kops.CloudProviderLinode:
+			linodeModelContext := &linodemodel.LinodeModelContext{
+				KopsModelContext: modelContext,
+			}
+			l.Builders = append(l.Builders,
+				&linodemodel.NetworkModelBuilder{LinodeModelContext: linodeModelContext, Lifecycle: networkLifecycle},
+				&linodemodel.InstanceModelBuilder{LinodeModelContext: linodeModelContext, BootstrapScriptBuilder: bootstrapScriptBuilder, Lifecycle: clusterLifecycle, SSHKeyLifecycle: securityLifecycle},
+			)
+
+		case kops.CloudProviderMetal:
+			// No special builders for bare metal (yet)
+
 		default:
 			return nil, fmt.Errorf("unknown cloudprovider %q", cluster.GetCloudProvider())
 		}
@@ -716,6 +761,10 @@ func (c *ApplyClusterCmd) Run(ctx context.Context) (*ApplyResults, error) {
 			target = azure.NewAzureAPITarget(cloud.(azure.AzureCloud))
 		case kops.CloudProviderScaleway:
 			target = scaleway.NewScwAPITarget(cloud.(scaleway.ScwCloud))
+		case kops.CloudProviderLinode:
+			target = linode.NewAPITarget(cloud.(linode.LinodeCloud))
+		case kops.CloudProviderMetal:
+			target = metal.NewAPITarget(cloud.(*metal.Cloud), nil)
 		default:
 			return nil, fmt.Errorf("direct configuration not supported with CloudProvider:%q", cluster.GetCloudProvider())
 		}
@@ -723,6 +772,23 @@ func (c *ApplyClusterCmd) Run(ctx context.Context) (*ApplyResults, error) {
 	case TargetTerraform:
 		outDir := c.OutDir
 		tf := terraform.NewTerraformTarget(cloud, project, outDir, cluster.Spec.Target)
+
+		// Register an azurerm provider alias for state storage blobs.
+		// If the storage account is in a different subscription, pass subscription_id.
+		if azureSpec := cluster.Spec.CloudProvider.Azure; azureSpec != nil {
+			args := map[string]string{}
+			if azureSpec.StorageAccountID != "" {
+				storageAccountID, err := arm.ParseResourceID(azureSpec.StorageAccountID)
+				if err != nil {
+					return nil, fmt.Errorf("parsing StorageAccountID: %w", err)
+				}
+				if storageAccountID.SubscriptionID != azureSpec.SubscriptionID {
+					args["subscription_id"] = storageAccountID.SubscriptionID
+				}
+			}
+			tf.AzureStorageAccountID = azureSpec.StorageAccountID
+			tf.EnsureTerraformProvider("azurerm", args)
+		}
 
 		// We include a few "util" variables in the TF output
 		if err := tf.AddOutputVariable("region", terraformWriter.LiteralFromStringValue(cloud.Region())); err != nil {
@@ -754,10 +820,14 @@ func (c *ApplyClusterCmd) Run(ctx context.Context) (*ApplyResults, error) {
 
 	case TargetDryRun:
 		var out io.Writer = os.Stdout
+		checkExisting := true
 		if c.GetAssets {
 			out = io.Discard
+			// For `kops get assets`,there is no need to run Find,
+			// we are just trying to discover the assets.
+			checkExisting = false
 		}
-		target = fi.NewCloudupDryRunTarget(assetBuilder, out)
+		target = fi.NewCloudupDryRunTarget(assetBuilder, checkExisting, out)
 
 		// Avoid making changes on a dry-run
 		shouldPrecreateDNS = false
@@ -909,7 +979,7 @@ func (c *ApplyClusterCmd) validateKubernetesVersion() error {
 		return nil
 	}
 
-	kopsVersion, err := semver.Parse(kopsbase.KOPS_RELEASE_VERSION)
+	kopsVersion, err := semver.Parse(kopsbase.Version)
 	if err != nil {
 		klog.Warningf("unable to parse kops version %q", kopsVersion)
 	} else {
@@ -918,15 +988,21 @@ func (c *ApplyClusterCmd) validateKubernetesVersion() error {
 		tooNewVersion.Pre = nil
 		tooNewVersion.Build = nil
 		if util.IsKubernetesGTE(tooNewVersion.String(), *parsed) {
+			bypassCheck := os.Getenv("KOPS_RUN_TOO_NEW_VERSION") != ""
+
 			fmt.Printf("\n")
 			fmt.Printf("%s\n", starline)
 			fmt.Printf("\n")
 			fmt.Printf("This version of kubernetes is not yet supported; upgrading kops is required\n")
-			fmt.Printf("(you can bypass this check by exporting KOPS_RUN_TOO_NEW_VERSION)\n")
+			if bypassCheck {
+				fmt.Printf("(this check has been bypassed by exporting KOPS_RUN_TOO_NEW_VERSION)\n")
+			} else {
+				fmt.Printf("(you can bypass this check by exporting KOPS_RUN_TOO_NEW_VERSION)\n")
+			}
 			fmt.Printf("\n")
 			fmt.Printf("%s\n", starline)
 			fmt.Printf("\n")
-			if os.Getenv("KOPS_RUN_TOO_NEW_VERSION") == "" {
+			if !bypassCheck {
 				return fmt.Errorf("kops upgrade is required")
 			}
 		}

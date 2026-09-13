@@ -6,14 +6,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2/types"
 	smithy "github.com/aws/smithy-go"
 	"github.com/aws/smithy-go/middleware"
 	smithytime "github.com/aws/smithy-go/time"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
 	smithywaiter "github.com/aws/smithy-go/waiter"
-	jmespath "github.com/jmespath/go-jmespath"
 	"time"
 )
 
@@ -68,9 +65,6 @@ type DescribeLoadBalancersOutput struct {
 }
 
 func (c *Client) addOperationDescribeLoadBalancersMiddlewares(stack *middleware.Stack, options Options) (err error) {
-	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
-		return err
-	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpDescribeLoadBalancers{}, middleware.After)
 	if err != nil {
 		return err
@@ -79,19 +73,7 @@ func (c *Client) addOperationDescribeLoadBalancersMiddlewares(stack *middleware.
 	if err != nil {
 		return err
 	}
-	if err := addProtocolFinalizerMiddlewares(stack, options, "DescribeLoadBalancers"); err != nil {
-		return fmt.Errorf("add protocol finalizers: %v", err)
-	}
 
-	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
-		return err
-	}
-	if err = addSetLoggerMiddleware(stack, options); err != nil {
-		return err
-	}
-	if err = addClientRequestID(stack); err != nil {
-		return err
-	}
 	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
@@ -101,37 +83,10 @@ func (c *Client) addOperationDescribeLoadBalancersMiddlewares(stack *middleware.
 	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetry(stack, options); err != nil {
+	if err = addRecordResponseTiming(stack, options); err != nil {
 		return err
 	}
-	if err = addRawResponseToMetadata(stack); err != nil {
-		return err
-	}
-	if err = addRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack, options); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addTimeOffsetBuild(stack, c); err != nil {
-		return err
-	}
-	if err = addUserAgentRetryMode(stack, options); err != nil {
-		return err
-	}
-	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opDescribeLoadBalancers(options.Region), middleware.Before); err != nil {
-		return err
-	}
-	if err = addRecursionDetection(stack); err != nil {
+	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -144,6 +99,9 @@ func (c *Client) addOperationDescribeLoadBalancersMiddlewares(stack *middleware.
 		return err
 	}
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
+	if err = addInterceptors(stack, options); err != nil {
 		return err
 	}
 	return nil
@@ -311,29 +269,23 @@ func (w *LoadBalancerAvailableWaiter) WaitForOutput(ctx context.Context, params 
 func loadBalancerAvailableStateRetryable(ctx context.Context, input *DescribeLoadBalancersInput, output *DescribeLoadBalancersOutput, err error) (bool, error) {
 
 	if err == nil {
-		pathValue, err := jmespath.Search("LoadBalancers[].State.Code", output)
-		if err != nil {
-			return false, fmt.Errorf("error evaluating waiter state: %w", err)
-		}
-
-		expectedValue := "active"
-		var match = true
-		listOfValues, ok := pathValue.([]interface{})
-		if !ok {
-			return false, fmt.Errorf("waiter comparator expected list got %T", pathValue)
-		}
-
-		if len(listOfValues) == 0 {
-			match = false
-		}
-		for _, v := range listOfValues {
-			value, ok := v.(types.LoadBalancerStateEnum)
-			if !ok {
-				return false, fmt.Errorf("waiter comparator expected types.LoadBalancerStateEnum value, got %T", pathValue)
+		v1 := output.LoadBalancers
+		var v2 []types.LoadBalancerStateEnum
+		for _, v := range v1 {
+			v3 := v.State
+			var v4 types.LoadBalancerStateEnum
+			if v3 != nil {
+				v5 := v3.Code
+				v4 = v5
 			}
-
-			if string(value) != expectedValue {
+			v2 = append(v2, v4)
+		}
+		expectedValue := "active"
+		match := len(v2) > 0
+		for _, v := range v2 {
+			if string(v) != expectedValue {
 				match = false
+				break
 			}
 		}
 
@@ -343,26 +295,28 @@ func loadBalancerAvailableStateRetryable(ctx context.Context, input *DescribeLoa
 	}
 
 	if err == nil {
-		pathValue, err := jmespath.Search("LoadBalancers[].State.Code", output)
-		if err != nil {
-			return false, fmt.Errorf("error evaluating waiter state: %w", err)
+		v1 := output.LoadBalancers
+		var v2 []types.LoadBalancerStateEnum
+		for _, v := range v1 {
+			v3 := v.State
+			var v4 types.LoadBalancerStateEnum
+			if v3 != nil {
+				v5 := v3.Code
+				v4 = v5
+			}
+			v2 = append(v2, v4)
 		}
-
 		expectedValue := "provisioning"
-		listOfValues, ok := pathValue.([]interface{})
-		if !ok {
-			return false, fmt.Errorf("waiter comparator expected list got %T", pathValue)
+		var match bool
+		for _, v := range v2 {
+			if string(v) == expectedValue {
+				match = true
+				break
+			}
 		}
 
-		for _, v := range listOfValues {
-			value, ok := v.(types.LoadBalancerStateEnum)
-			if !ok {
-				return false, fmt.Errorf("waiter comparator expected types.LoadBalancerStateEnum value, got %T", pathValue)
-			}
-
-			if string(value) == expectedValue {
-				return true, nil
-			}
+		if match {
+			return true, nil
 		}
 	}
 
@@ -378,6 +332,9 @@ func loadBalancerAvailableStateRetryable(ctx context.Context, input *DescribeLoa
 		}
 	}
 
+	if err != nil {
+		return false, err
+	}
 	return true, nil
 }
 
@@ -556,6 +513,9 @@ func loadBalancerExistsStateRetryable(ctx context.Context, input *DescribeLoadBa
 		}
 	}
 
+	if err != nil {
+		return false, err
+	}
 	return true, nil
 }
 
@@ -721,29 +681,23 @@ func (w *LoadBalancersDeletedWaiter) WaitForOutput(ctx context.Context, params *
 func loadBalancersDeletedStateRetryable(ctx context.Context, input *DescribeLoadBalancersInput, output *DescribeLoadBalancersOutput, err error) (bool, error) {
 
 	if err == nil {
-		pathValue, err := jmespath.Search("LoadBalancers[].State.Code", output)
-		if err != nil {
-			return false, fmt.Errorf("error evaluating waiter state: %w", err)
-		}
-
-		expectedValue := "active"
-		var match = true
-		listOfValues, ok := pathValue.([]interface{})
-		if !ok {
-			return false, fmt.Errorf("waiter comparator expected list got %T", pathValue)
-		}
-
-		if len(listOfValues) == 0 {
-			match = false
-		}
-		for _, v := range listOfValues {
-			value, ok := v.(types.LoadBalancerStateEnum)
-			if !ok {
-				return false, fmt.Errorf("waiter comparator expected types.LoadBalancerStateEnum value, got %T", pathValue)
+		v1 := output.LoadBalancers
+		var v2 []types.LoadBalancerStateEnum
+		for _, v := range v1 {
+			v3 := v.State
+			var v4 types.LoadBalancerStateEnum
+			if v3 != nil {
+				v5 := v3.Code
+				v4 = v5
 			}
-
-			if string(value) != expectedValue {
+			v2 = append(v2, v4)
+		}
+		expectedValue := "active"
+		match := len(v2) > 0
+		for _, v := range v2 {
+			if string(v) != expectedValue {
 				match = false
+				break
 			}
 		}
 
@@ -764,6 +718,9 @@ func loadBalancersDeletedStateRetryable(ctx context.Context, input *DescribeLoad
 		}
 	}
 
+	if err != nil {
+		return false, err
+	}
 	return true, nil
 }
 
@@ -848,11 +805,3 @@ type DescribeLoadBalancersAPIClient interface {
 }
 
 var _ DescribeLoadBalancersAPIClient = (*Client)(nil)
-
-func newServiceMetadataMiddleware_opDescribeLoadBalancers(region string) *awsmiddleware.RegisterServiceMetadata {
-	return &awsmiddleware.RegisterServiceMetadata{
-		Region:        region,
-		ServiceID:     ServiceID,
-		OperationName: "DescribeLoadBalancers",
-	}
-}

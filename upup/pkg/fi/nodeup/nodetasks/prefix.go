@@ -25,14 +25,13 @@ import (
 	"path"
 	"strings"
 
-	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/ec2/imds"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	smithyhttp "github.com/aws/smithy-go/transport/http"
 	"k8s.io/klog/v2"
 	"k8s.io/kops/pkg/apis/kops"
 	"k8s.io/kops/upup/pkg/fi"
-	"k8s.io/kops/upup/pkg/fi/cloudup/awsup"
 	"k8s.io/kops/upup/pkg/fi/nodeup/local"
 )
 
@@ -40,7 +39,7 @@ type Prefix struct {
 	Name string
 }
 
-var _ fi.HasName = &Prefix{}
+var _ fi.HasName = (*Prefix)(nil)
 
 func (f *Prefix) GetName() *string {
 	return &f.Name
@@ -96,9 +95,9 @@ func (_ *Prefix) RenderLocal(t *local.LocalTarget, a, e, changes *Prefix) error 
 		return err
 	}
 
-	response, err := t.Cloud.(awsup.AWSCloud).EC2().AssignIpv6Addresses(ctx, &ec2.AssignIpv6AddressesInput{
-		Ipv6PrefixCount:    fi.PtrTo(int32(1)),
-		NetworkInterfaceId: fi.PtrTo(interfaceId),
+	response, err := t.Cloud.AssignIpv6Addresses(ctx, &ec2.AssignIpv6AddressesInput{
+		Ipv6PrefixCount:    new(int32(1)),
+		NetworkInterfaceId: new(interfaceId),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to assign prefix: %w", err)
@@ -128,7 +127,7 @@ func getInstanceMetadataList(ctx context.Context, category string) ([]string, er
 	metadata := imds.NewFromConfig(cfg)
 	resp, err := metadata.GetMetadata(ctx, &imds.GetMetadataInput{Path: category})
 	if err != nil {
-		var awsErr *awshttp.ResponseError
+		var awsErr *smithyhttp.ResponseError
 		if errors.As(err, &awsErr) && awsErr.HTTPStatusCode() == http.StatusNotFound {
 			return nil, nil
 		} else {

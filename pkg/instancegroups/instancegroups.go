@@ -67,6 +67,28 @@ func (v *ValidationTimeoutError) Is(err error) bool {
 	return ok
 }
 
+// DeregisterError represents a failure to deregister an instance from
+// the cloud's load balancers. The rolling update treats this as fatal
+// because continuing would leave traffic routed to nodes that are about
+// to be terminated.
+type DeregisterError struct {
+	err error
+}
+
+func (d *DeregisterError) Error() string {
+	return d.err.Error()
+}
+
+func (d *DeregisterError) Unwrap() error {
+	return d.err
+}
+
+// Is checks that a given error is a DeregisterError.
+func (d *DeregisterError) Is(err error) bool {
+	_, ok := err.(*DeregisterError)
+	return ok
+}
+
 // promptInteractive asks the user to continue, mostly copied from vendor/google.golang.org/api/examples/gmail.go.
 func promptInteractive(upgradedHostID, upgradedHostName string) (stopPrompting bool, err error) {
 	stopPrompting = false
@@ -98,7 +120,7 @@ func promptInteractive(upgradedHostID, upgradedHostName string) (stopPrompting b
 }
 
 // RollingUpdate performs a rolling update on a list of instances.
-func (c *RollingUpdateCluster) rollingUpdateInstanceGroup(group *cloudinstances.CloudInstanceGroup, sleepAfterTerminate time.Duration) (err error) {
+func (c *RollingUpdateCluster) rollingUpdateInstanceGroup(ctx context.Context, group *cloudinstances.CloudInstanceGroup, sleepAfterTerminate time.Duration) (err error) {
 	isBastion := group.InstanceGroup.IsBastion()
 	// Do not need a k8s client if you are doing cloudonly.
 	if c.K8sClient == nil && !c.CloudOnly {
@@ -123,7 +145,7 @@ func (c *RollingUpdateCluster) rollingUpdateInstanceGroup(group *cloudinstances.
 	}
 
 	if !c.CloudOnly {
-		err = c.taintAllNeedUpdate(group, update)
+		err = c.taintAllNeedUpdate(ctx, group, update)
 		if err != nil {
 			return err
 		}
@@ -160,7 +182,7 @@ func (c *RollingUpdateCluster) rollingUpdateInstanceGroup(group *cloudinstances.
 		maxSurge = 0
 	}
 
-	if group.InstanceGroup.Spec.Role == api.InstanceGroupRoleControlPlane && maxSurge != 0 {
+	if group.InstanceGroup.Spec.Role.HasControlPlane() && maxSurge != 0 {
 		// Control plane nodes are incapable of surging because they rely on registering themselves through
 		// the local apiserver. That apiserver depends on the local etcd, which relies on being
 		// joined to the etcd cluster.
@@ -221,7 +243,7 @@ func (c *RollingUpdateCluster) rollingUpdateInstanceGroup(group *cloudinstances.
 
 	for uIdx, u := range update {
 		go func(m *cloudinstances.CloudInstance) {
-			terminateChan <- c.drainTerminateAndWait(m, sleepAfterTerminate)
+			terminateChan <- c.drainTerminateAndWait(ctx, m, sleepAfterTerminate)
 		}(u)
 		runningDrains++
 
@@ -319,7 +341,7 @@ func waitForPendingBeforeReturningError(runningDrains int, terminateChan chan er
 	return err
 }
 
-func (c *RollingUpdateCluster) taintAllNeedUpdate(group *cloudinstances.CloudInstanceGroup, update []*cloudinstances.CloudInstance) error {
+func (c *RollingUpdateCluster) taintAllNeedUpdate(ctx context.Context, group *cloudinstances.CloudInstanceGroup, update []*cloudinstances.CloudInstance) error {
 	var toTaint []*corev1.Node
 	for _, u := range update {
 		if u.Node != nil && !u.Node.Spec.Unschedulable {
@@ -341,7 +363,7 @@ func (c *RollingUpdateCluster) taintAllNeedUpdate(group *cloudinstances.CloudIns
 		}
 		klog.Infof("Tainting %d %s in %q instancegroup.", len(toTaint), noun, group.InstanceGroup.Name)
 		for _, n := range toTaint {
-			if err := c.patchTaint(n); err != nil {
+			if err := c.patchTaint(ctx, n); err != nil {
 				if c.FailOnDrainError {
 					return fmt.Errorf("failed to taint node %q: %v", n, err)
 				}
@@ -352,7 +374,7 @@ func (c *RollingUpdateCluster) taintAllNeedUpdate(group *cloudinstances.CloudIns
 	return nil
 }
 
-func (c *RollingUpdateCluster) patchTaint(node *corev1.Node) error {
+func (c *RollingUpdateCluster) patchTaint(ctx context.Context, node *corev1.Node) error {
 	oldData, err := json.Marshal(node)
 	if err != nil {
 		return err
@@ -373,14 +395,14 @@ func (c *RollingUpdateCluster) patchTaint(node *corev1.Node) error {
 		return err
 	}
 
-	_, err = c.K8sClient.CoreV1().Nodes().Patch(c.Ctx, node.Name, types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{})
+	_, err = c.K8sClient.CoreV1().Nodes().Patch(ctx, node.Name, types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{})
 	if apierrors.IsNotFound(err) {
 		return nil
 	}
 	return err
 }
 
-func (c *RollingUpdateCluster) patchExcludeFromLB(node *corev1.Node) error {
+func (c *RollingUpdateCluster) patchExcludeFromLB(ctx context.Context, node *corev1.Node) error {
 	oldData, err := json.Marshal(node)
 	if err != nil {
 		return err
@@ -405,14 +427,14 @@ func (c *RollingUpdateCluster) patchExcludeFromLB(node *corev1.Node) error {
 		return err
 	}
 
-	_, err = c.K8sClient.CoreV1().Nodes().Patch(c.Ctx, node.Name, types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{})
+	_, err = c.K8sClient.CoreV1().Nodes().Patch(ctx, node.Name, types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{})
 	if apierrors.IsNotFound(err) {
 		return nil
 	}
 	return err
 }
 
-func (c *RollingUpdateCluster) drainTerminateAndWait(u *cloudinstances.CloudInstance, sleepAfterTerminate time.Duration) error {
+func (c *RollingUpdateCluster) drainTerminateAndWait(ctx context.Context, u *cloudinstances.CloudInstance, sleepAfterTerminate time.Duration) error {
 	instanceID := u.ID
 
 	nodeName := ""
@@ -430,9 +452,9 @@ func (c *RollingUpdateCluster) drainTerminateAndWait(u *cloudinstances.CloudInst
 		if u.Node != nil {
 			klog.Infof("Draining the node: %q.", nodeName)
 
-			if err := c.drainNode(u); err != nil {
+			if err := c.drainNode(ctx, u); err != nil {
 				if c.FailOnDrainError {
-					return fmt.Errorf("failed to drain node %q: %v", nodeName, err)
+					return fmt.Errorf("failed to drain node %q: %w", nodeName, err)
 				}
 				klog.Infof("Ignoring error draining node %q: %v", nodeName, err)
 			}
@@ -449,7 +471,7 @@ func (c *RollingUpdateCluster) drainTerminateAndWait(u *cloudinstances.CloudInst
 			klog.Warningf("no kubernetes Node associated with %s, skipping node deletion", instanceID)
 		} else {
 			klog.Infof("deleting node %q from kubernetes", nodeName)
-			if err := c.deleteNode(u.Node); err != nil {
+			if err := c.deleteNode(ctx, u.Node); err != nil {
 				return fmt.Errorf("error deleting node %q: %v", nodeName, err)
 			}
 		}
@@ -460,7 +482,7 @@ func (c *RollingUpdateCluster) drainTerminateAndWait(u *cloudinstances.CloudInst
 		return err
 	}
 
-	if err := c.reconcileInstanceGroup(); err != nil {
+	if err := c.reconcileInstanceGroup(ctx); err != nil {
 		klog.Errorf("error reconciling instance group %q: %v", u.CloudInstanceGroup.HumanName, err)
 		return err
 	}
@@ -472,7 +494,7 @@ func (c *RollingUpdateCluster) drainTerminateAndWait(u *cloudinstances.CloudInst
 	return nil
 }
 
-func (c *RollingUpdateCluster) reconcileInstanceGroup() error {
+func (c *RollingUpdateCluster) reconcileInstanceGroup(ctx context.Context) error {
 	if c.Cluster.GetCloudProvider() != api.CloudProviderOpenstack &&
 		c.Cluster.GetCloudProvider() != api.CloudProviderHetzner &&
 		c.Cluster.GetCloudProvider() != api.CloudProviderScaleway &&
@@ -497,7 +519,7 @@ func (c *RollingUpdateCluster) reconcileInstanceGroup() error {
 		DeletionProcessing: fi.DeletionProcessingModeDeleteIfNotDeferrred,
 	}
 
-	_, err := applyCmd.Run(c.Ctx)
+	_, err := applyCmd.Run(ctx)
 	return err
 }
 
@@ -537,7 +559,7 @@ func (c *RollingUpdateCluster) validateClusterWithTimeout(validateCount int, gro
 
 	for {
 		// Note that we validate at least once before checking the timeout, in case the cluster is healthy with a short timeout
-		result, err := c.ClusterValidator.Validate()
+		result, err := c.ClusterValidator.Validate(ctx)
 		if err == nil && !hasFailureRelevantToGroup(result.Failures, group) {
 			successCount++
 			if successCount >= validateCount {
@@ -645,7 +667,7 @@ func (c *RollingUpdateCluster) deleteInstance(u *cloudinstances.CloudInstance) e
 }
 
 // drainNode drains a K8s node.
-func (c *RollingUpdateCluster) drainNode(u *cloudinstances.CloudInstance) error {
+func (c *RollingUpdateCluster) drainNode(ctx context.Context, u *cloudinstances.CloudInstance) error {
 	if c.K8sClient == nil {
 		return fmt.Errorf("K8sClient not set")
 	}
@@ -659,7 +681,7 @@ func (c *RollingUpdateCluster) drainNode(u *cloudinstances.CloudInstance) error 
 	}
 
 	helper := &drain.Helper{
-		Ctx:                 c.Ctx,
+		Ctx:                 ctx,
 		Client:              c.K8sClient,
 		Force:               true,
 		GracePeriodSeconds:  -1,
@@ -667,6 +689,9 @@ func (c *RollingUpdateCluster) drainNode(u *cloudinstances.CloudInstance) error 
 		Out:                 os.Stdout,
 		ErrOut:              os.Stderr,
 		Timeout:             c.DrainTimeout,
+
+		// The zero value would retry evictions without any delay
+		EvictErrorRetryDelay: 5 * time.Second,
 
 		// We want to proceed even when pods are using emptyDir volumes
 		DeleteEmptyDirData: true,
@@ -679,7 +704,7 @@ func (c *RollingUpdateCluster) drainNode(u *cloudinstances.CloudInstance) error 
 		return fmt.Errorf("error cordoning node: %v", err)
 	}
 
-	if err := c.patchExcludeFromLB(u.Node); err != nil {
+	if err := c.patchExcludeFromLB(ctx, u.Node); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil
 		}
@@ -700,7 +725,9 @@ func (c *RollingUpdateCluster) drainNode(u *cloudinstances.CloudInstance) error 
 
 	if shouldDeregister {
 		if err := c.Cloud.DeregisterInstance(u); err != nil {
-			return fmt.Errorf("error deregistering instance %q, node %q: %w", u.ID, u.Node.Name, err)
+			return &DeregisterError{
+				err: fmt.Errorf("error deregistering instance %q, node %q: %w", u.ID, u.Node.Name, err),
+			}
 		}
 	}
 
@@ -720,9 +747,9 @@ func (c *RollingUpdateCluster) drainNode(u *cloudinstances.CloudInstance) error 
 }
 
 // deleteNode deletes a node from the k8s API.  It does not delete the underlying instance.
-func (c *RollingUpdateCluster) deleteNode(node *corev1.Node) error {
+func (c *RollingUpdateCluster) deleteNode(ctx context.Context, node *corev1.Node) error {
 	var options metav1.DeleteOptions
-	err := c.K8sClient.CoreV1().Nodes().Delete(c.Ctx, node.Name, options)
+	err := c.K8sClient.CoreV1().Nodes().Delete(ctx, node.Name, options)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil
@@ -735,7 +762,7 @@ func (c *RollingUpdateCluster) deleteNode(node *corev1.Node) error {
 }
 
 // UpdateSingleInstance performs a rolling update on a single instance
-func (c *RollingUpdateCluster) UpdateSingleInstance(cloudMember *cloudinstances.CloudInstance, detach bool) error {
+func (c *RollingUpdateCluster) UpdateSingleInstance(ctx context.Context, cloudMember *cloudinstances.CloudInstance, detach bool) error {
 	if detach {
 		if cloudMember.CloudInstanceGroup.InstanceGroup.IsControlPlane() {
 			klog.Warning("cannot detach control-plane instances. Assuming --surge=false")
@@ -750,5 +777,5 @@ func (c *RollingUpdateCluster) UpdateSingleInstance(cloudMember *cloudinstances.
 		}
 	}
 
-	return c.drainTerminateAndWait(cloudMember, 0)
+	return c.drainTerminateAndWait(ctx, cloudMember, 0)
 }

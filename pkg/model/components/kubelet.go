@@ -24,6 +24,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"k8s.io/kops/pkg/apis/kops"
+	"k8s.io/kops/pkg/apis/kops/model"
 	"k8s.io/kops/upup/pkg/fi"
 	"k8s.io/kops/upup/pkg/fi/cloudup/gce"
 	"k8s.io/kops/upup/pkg/fi/loader"
@@ -38,54 +39,68 @@ var _ loader.ClusterOptionsBuilder = &KubeletOptionsBuilder{}
 
 // BuildOptions is responsible for filling the defaults for the kubelet
 func (b *KubeletOptionsBuilder) BuildOptions(cluster *kops.Cluster) error {
-	clusterSpec := &cluster.Spec
-
-	if clusterSpec.Kubelet == nil {
-		clusterSpec.Kubelet = &kops.KubeletConfigSpec{}
+	if cluster.Spec.Kubelet == nil {
+		cluster.Spec.Kubelet = &kops.KubeletConfigSpec{}
 	}
-	if clusterSpec.ControlPlaneKubelet == nil {
-		clusterSpec.ControlPlaneKubelet = &kops.KubeletConfigSpec{}
+	if cluster.Spec.ControlPlaneKubelet == nil {
+		cluster.Spec.ControlPlaneKubelet = &kops.KubeletConfigSpec{}
 	}
 
+	if err := b.configureKubelet(cluster, cluster.Spec.Kubelet, b.NodeKubernetesVersion()); err != nil {
+		return err
+	}
+	if err := b.configureKubelet(cluster, cluster.Spec.ControlPlaneKubelet, b.ControlPlaneKubernetesVersion()); err != nil {
+		return err
+	}
+
+	// We _do_ allow debugging handlers, so we can do logs
+	// This does allow more access than we would like though
+	cluster.Spec.ControlPlaneKubelet.EnableDebuggingHandlers = new(true)
+
+	// IsolateControlPlane enables the legacy behaviour, where master pods on a separate network
+	// In newer versions of kubernetes, most of that functionality has been removed though
+	if fi.ValueOf(cluster.Spec.Networking.IsolateControlPlane) {
+		cluster.Spec.ControlPlaneKubelet.EnableDebuggingHandlers = new(false)
+		cluster.Spec.ControlPlaneKubelet.HairpinMode = "none"
+	}
+
+	return nil
+}
+
+func (b *KubeletOptionsBuilder) configureKubelet(cluster *kops.Cluster, kubelet *kops.KubeletConfigSpec, kubernetesVersion model.KubernetesVersion) error {
 	// Standard options
-	clusterSpec.Kubelet.EnableDebuggingHandlers = fi.PtrTo(true)
-	clusterSpec.Kubelet.PodManifestPath = "/etc/kubernetes/manifests"
-	clusterSpec.Kubelet.LogLevel = fi.PtrTo(int32(2))
-	clusterSpec.Kubelet.ClusterDomain = clusterSpec.ClusterDNSDomain
+	kubelet.EnableDebuggingHandlers = new(true)
+	kubelet.PodManifestPath = "/etc/kubernetes/manifests"
+	kubelet.LogLevel = new(int32(2))
+	kubelet.ClusterDomain = cluster.Spec.ClusterDNSDomain
 
 	// AllowPrivileged is deprecated and removed in v1.14.
 	// See https://github.com/kubernetes/kubernetes/pull/71835
-	if clusterSpec.Kubelet.AllowPrivileged != nil {
+	if kubelet.AllowPrivileged != nil {
 		// If it is explicitly set to false, return an error, because this
 		// behavior is no longer supported in v1.14 (the default was true, prior).
-		if !*clusterSpec.Kubelet.AllowPrivileged {
+		if !*kubelet.AllowPrivileged {
 			klog.Warningf("Kubelet's --allow-privileged flag is no longer supported in v1.14.")
 		}
 		// Explicitly set it to nil, so it won't be passed on the command line.
-		clusterSpec.Kubelet.AllowPrivileged = nil
+		kubelet.AllowPrivileged = nil
 	}
 
-	if clusterSpec.Kubelet.ClusterDNS == "" {
-		if clusterSpec.KubeDNS != nil && clusterSpec.KubeDNS.NodeLocalDNS != nil && fi.ValueOf(clusterSpec.KubeDNS.NodeLocalDNS.Enabled) {
-			clusterSpec.Kubelet.ClusterDNS = clusterSpec.KubeDNS.NodeLocalDNS.LocalIP
+	if kubelet.ClusterDNS == "" {
+		if cluster.Spec.KubeDNS != nil && cluster.Spec.KubeDNS.NodeLocalDNS != nil && fi.ValueOf(cluster.Spec.KubeDNS.NodeLocalDNS.Enabled) {
+			kubelet.ClusterDNS = cluster.Spec.KubeDNS.NodeLocalDNS.LocalIP
 		} else {
-			ip, err := WellKnownServiceIP(&clusterSpec.Networking, 10)
+			ip, err := WellKnownServiceIP(&cluster.Spec.Networking, 10)
 			if err != nil {
 				return err
 			}
-			clusterSpec.Kubelet.ClusterDNS = ip.String()
+			kubelet.ClusterDNS = ip.String()
 		}
 	}
 
-	clusterSpec.ControlPlaneKubelet.RegisterSchedulable = fi.PtrTo(false)
-	// Replace the CIDR with a CIDR allocated by KCM (the default, but included for clarity)
-	// We _do_ allow debugging handlers, so we can do logs
-	// This does allow more access than we would like though
-	clusterSpec.ControlPlaneKubelet.EnableDebuggingHandlers = fi.PtrTo(true)
-
 	{
 		// For pod eviction in low memory or empty disk situations
-		if clusterSpec.Kubelet.EvictionHard == nil {
+		if kubelet.EvictionHard == nil {
 			evictionHard := []string{
 				// TODO: Some people recommend 250Mi, but this would hurt small machines
 				"memory.available<100Mi",
@@ -97,111 +112,60 @@ func (b *KubeletOptionsBuilder) BuildOptions(cluster *kops.Cluster) error {
 				"imagefs.available<10%",
 				"imagefs.inodesFree<5%",
 			}
-			clusterSpec.Kubelet.EvictionHard = fi.PtrTo(strings.Join(evictionHard, ","))
+			kubelet.EvictionHard = new(strings.Join(evictionHard, ","))
 		}
 	}
 
 	// use kubeconfig instead of api-servers
 	const kubeconfigPath = "/var/lib/kubelet/kubeconfig"
-	clusterSpec.Kubelet.KubeconfigPath = kubeconfigPath
-	clusterSpec.ControlPlaneKubelet.KubeconfigPath = kubeconfigPath
+	kubelet.KubeconfigPath = kubeconfigPath
 
-	// IsolateControlPlane enables the legacy behaviour, where master pods on a separate network
-	// In newer versions of kubernetes, most of that functionality has been removed though
-	if fi.ValueOf(clusterSpec.Networking.IsolateControlPlane) {
-		clusterSpec.ControlPlaneKubelet.EnableDebuggingHandlers = fi.PtrTo(false)
-		clusterSpec.ControlPlaneKubelet.HairpinMode = "none"
-	}
+	kubelet.CgroupRoot = "/"
 
 	cloudProvider := cluster.GetCloudProvider()
-
-	clusterSpec.Kubelet.CgroupRoot = "/"
-
 	klog.V(1).Infof("Cloud Provider: %s", cloudProvider)
-	if cloudProvider == kops.CloudProviderAWS {
-		clusterSpec.Kubelet.CloudProvider = "aws"
-	}
-
-	if cloudProvider == kops.CloudProviderDO {
-		clusterSpec.Kubelet.CloudProvider = "external"
+	if cloudProvider == kops.CloudProviderMetal {
+		// metal does not (yet) have a cloud-controller-manager, so we don't need to set the cloud-provider flag
+		// If we do set it to external, kubelet will taint the node with the node.kops.k8s.io/uninitialized taint
+		// and there is no cloud-controller-manager to remove it
+		kubelet.CloudProvider = ""
+	} else {
+		kubelet.CloudProvider = "external"
 	}
 
 	if cloudProvider == kops.CloudProviderGCE {
-		clusterSpec.Kubelet.CloudProvider = "gce"
-		clusterSpec.Kubelet.HairpinMode = "promiscuous-bridge"
+		kubelet.HairpinMode = "promiscuous-bridge"
 
-		if clusterSpec.CloudConfig == nil {
-			clusterSpec.CloudConfig = &kops.CloudConfiguration{}
+		if cluster.Spec.CloudConfig == nil {
+			cluster.Spec.CloudConfig = &kops.CloudConfiguration{}
 		}
-		clusterSpec.CloudProvider.GCE.Multizone = fi.PtrTo(true)
-		clusterSpec.CloudProvider.GCE.NodeTags = fi.PtrTo(gce.TagForRole(b.ClusterName, kops.InstanceGroupRoleNode))
-
-	}
-
-	if cloudProvider == kops.CloudProviderHetzner {
-		clusterSpec.Kubelet.CloudProvider = "external"
-	}
-
-	if cloudProvider == kops.CloudProviderOpenstack {
-		clusterSpec.Kubelet.CloudProvider = "openstack"
-	}
-
-	if cloudProvider == kops.CloudProviderAzure {
-		clusterSpec.Kubelet.CloudProvider = "azure"
-	}
-
-	if cloudProvider == kops.CloudProviderScaleway {
-		clusterSpec.Kubelet.CloudProvider = "external"
-	}
-
-	if clusterSpec.ExternalCloudControllerManager != nil {
-		clusterSpec.Kubelet.CloudProvider = "external"
-	}
-
-	// Prevent image GC from pruning the pause image
-	// https://github.com/kubernetes/enhancements/tree/master/keps/sig-node/2040-kubelet-cri#pinned-images
-	image := "registry.k8s.io/pause:3.9"
-	var err error
-	if image, err = b.AssetBuilder.RemapImage(image); err != nil {
-		return err
-	}
-	clusterSpec.Kubelet.PodInfraContainerImage = image
-
-	if clusterSpec.Kubelet.FeatureGates == nil {
-		clusterSpec.Kubelet.FeatureGates = make(map[string]string)
-	}
-
-	if clusterSpec.CloudProvider.AWS != nil {
-		if _, found := clusterSpec.Kubelet.FeatureGates["InTreePluginAWSUnregister"]; !found && b.IsKubernetesLT("1.31") {
-			clusterSpec.Kubelet.FeatureGates["InTreePluginAWSUnregister"] = "true"
-		}
-
-		if _, found := clusterSpec.Kubelet.FeatureGates["CSIMigrationAWS"]; !found && b.IsKubernetesLT("1.27") {
-			clusterSpec.Kubelet.FeatureGates["CSIMigrationAWS"] = "true"
-		}
+		cluster.Spec.CloudProvider.GCE.Multizone = new(true)
+		cluster.Spec.CloudProvider.GCE.NodeTags = new(gce.TagForRole(b.ClusterName, kops.InstanceGroupRoleNode))
 	}
 
 	// Set systemd as the default cgroup driver for kubelet
-	if clusterSpec.Kubelet.CgroupDriver == "" {
-		clusterSpec.Kubelet.CgroupDriver = "systemd"
-	}
+	// In Kubernetes 1.34, with the KubeletCgroupDriverFromCRI feature gate enabled and a container runtime
+	// that supports the RuntimeConfig CRI RPC, the kubelet automatically detects the appropriate cgroup driver
+	// from the runtime, and ignores the cgroupDriver setting within the kubelet configuration.
+	kubelet.CgroupDriver = "systemd"
 
-	if clusterSpec.Kubelet.ProtectKernelDefaults == nil {
-		clusterSpec.Kubelet.ProtectKernelDefaults = fi.PtrTo(true)
+	if kubelet.ProtectKernelDefaults == nil {
+		kubelet.ProtectKernelDefaults = new(true)
 	}
 
 	// We do not enable graceful shutdown when using amazonaws due to leaking ENIs.
 	// Graceful shutdown is also not available by default on k8s < 1.21
-	if clusterSpec.Kubelet.ShutdownGracePeriod == nil && clusterSpec.Networking.AmazonVPC == nil {
-		clusterSpec.Kubelet.ShutdownGracePeriod = &metav1.Duration{Duration: time.Duration(30 * time.Second)}
-		clusterSpec.Kubelet.ShutdownGracePeriodCriticalPods = &metav1.Duration{Duration: time.Duration(10 * time.Second)}
-	} else if clusterSpec.Networking.AmazonVPC != nil {
-		clusterSpec.Kubelet.ShutdownGracePeriod = &metav1.Duration{Duration: 0}
-		clusterSpec.Kubelet.ShutdownGracePeriodCriticalPods = &metav1.Duration{Duration: 0}
+	if kubelet.ShutdownGracePeriod == nil && cluster.Spec.Networking.AmazonVPC == nil {
+		kubelet.ShutdownGracePeriod = &metav1.Duration{Duration: time.Duration(30 * time.Second)}
+		kubelet.ShutdownGracePeriodCriticalPods = &metav1.Duration{Duration: time.Duration(10 * time.Second)}
+	} else if cluster.Spec.Networking.AmazonVPC != nil {
+		kubelet.ShutdownGracePeriod = &metav1.Duration{Duration: 0}
+		kubelet.ShutdownGracePeriodCriticalPods = &metav1.Duration{Duration: 0}
 	}
 
-	clusterSpec.Kubelet.RegisterSchedulable = fi.PtrTo(true)
-	clusterSpec.ControlPlaneKubelet.RegisterSchedulable = fi.PtrTo(true)
+	if kubernetesVersion.IsLT("1.34") {
+		kubelet.RegisterSchedulable = new(true)
+	}
 
 	return nil
 }

@@ -19,7 +19,7 @@ package openstacktasks
 import (
 	"fmt"
 
-	cinderv3 "github.com/gophercloud/gophercloud/openstack/blockstorage/v3/volumes"
+	cinderv3 "github.com/gophercloud/gophercloud/v2/openstack/blockstorage/v3/volumes"
 	"k8s.io/klog/v2"
 	"k8s.io/kops/upup/pkg/fi"
 	"k8s.io/kops/upup/pkg/fi/cloudup/openstack"
@@ -36,8 +36,8 @@ type Volume struct {
 	Lifecycle        fi.Lifecycle
 }
 
-var _ fi.CompareWithID = &Volume{}
-var _ fi.CloudupTaskNormalize = &Volume{}
+var _ fi.CompareWithID = (*Volume)(nil)
+var _ fi.CloudupTaskNormalize = (*Volume)(nil)
 
 func (c *Volume) CompareWithID() *string {
 	return c.ID
@@ -60,11 +60,11 @@ func (c *Volume) Find(context *fi.CloudupContext) (*Volume, error) {
 	}
 	v := volumes[0]
 	actual := &Volume{
-		ID:               fi.PtrTo(v.ID),
-		Name:             fi.PtrTo(v.Name),
-		AvailabilityZone: fi.PtrTo(v.AvailabilityZone),
-		VolumeType:       fi.PtrTo(v.VolumeType),
-		SizeGB:           fi.PtrTo(int64(v.Size)),
+		ID:               new(v.ID),
+		Name:             new(v.Name),
+		AvailabilityZone: new(v.AvailabilityZone),
+		VolumeType:       new(v.VolumeType),
+		SizeGB:           new(int64(v.Size)),
 		Tags:             v.Metadata,
 		Lifecycle:        c.Lifecycle,
 	}
@@ -142,8 +142,8 @@ func (_ *Volume) RenderOpenstack(t *openstack.OpenstackAPITarget, a, e, changes 
 			return fmt.Errorf("error creating PersistentVolume: %v", err)
 		}
 
-		e.ID = fi.PtrTo(v.ID)
-		e.AvailabilityZone = fi.PtrTo(v.AvailabilityZone)
+		e.ID = new(v.ID)
+		e.AvailabilityZone = new(v.AvailabilityZone)
 		return nil
 	}
 

@@ -38,6 +38,7 @@ Hooks:
       - -c
       - apt-get update
       image: busybox
+InstallCNIAssets: true
 KeypairIDs: {}
 KubeProxy:
   cpuLimit: 30m
@@ -59,5 +60,4 @@ UpdatePolicy: automatic
 configStore: {}
 containerdConfig:
   logLevel: info
-usesLegacyGossip: false
 usesNoneDNS: false

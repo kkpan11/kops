@@ -22,9 +22,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/octago/sflags/gen/gpflag"
 	"github.com/spf13/pflag"
+	"github.com/urfave/sflags/gen/gpflag"
 	"k8s.io/klog/v2"
+	"k8s.io/kops/tests/e2e/kubetest2-kops/aws"
 	"k8s.io/kops/tests/e2e/kubetest2-kops/builder"
 	"k8s.io/kops/tests/e2e/pkg/target"
 
@@ -56,8 +57,8 @@ type deployer struct {
 	Env                    []string `flag:"env" desc:"Additional env vars to set for kops commands in NAME=VALUE format"`
 	CreateArgs             string   `flag:"create-args" desc:"Extra space-separated arguments passed to 'kops create cluster'"`
 	KopsBinaryPath         string   `flag:"kops-binary-path" desc:"The path to kops executable used for testing"`
+	KopsVersion            string   `flag:"kops-version" desc:"The kops version to use in the cluster, must be a released version of kops"`
 	KubernetesFeatureGates string   `flag:"kubernetes-feature-gates" desc:"Feature Gates to enable on Kubernetes components"`
-	createBucket           bool     `flag:"-"`
 
 	// ControlPlaneCount specifies the number of VMs in the control-plane.
 	ControlPlaneCount int `flag:"control-plane-count" desc:"Number of control-plane instances"`
@@ -68,7 +69,9 @@ type deployer struct {
 	ValidationWait     time.Duration `flag:"validation-wait" desc:"time to wait for newly created cluster to pass validation"`
 	ValidationCount    int           `flag:"validation-count" desc:"how many times should a validation pass"`
 	ValidationInterval time.Duration `flag:"validation-interval" desc:"time in duration to wait between validation attempts"`
+	MaxUnreadyNodes    int           `flag:"max-unready-nodes" desc:"maximum number of non-ready worker nodes tolerated during validation, helpful to set when running scale tests"`
 	MaxNodesToDump     string        `flag:"max-nodes-to-dump" desc:"max number of nodes to dump logs from, helpful to set when running scale tests"`
+	NodeDumpTimeout    time.Duration `flag:"node-dump-timeout" desc:"timeout for connecting to and dumping logs from a single node, helpful to raise when running scale tests"`
 
 	TemplatePath string `flag:"template-path" desc:"The path to the manifest template used for cluster creation"`
 
@@ -86,9 +89,22 @@ type deployer struct {
 
 	BuildOptions *builder.BuildOptions
 
+	// EnvFile is the path to a file that will be written containing the env vars, in particular KOPS_STATE_STORE
+	EnvFile string `flag:"env-file" desc:"The path to a file that will be written containing the env vars, in particular KOPS_STATE_STORE"`
+
 	// manifestPath is the location of the rendered manifest based on TemplatePath
 	manifestPath string
 	terraform    *target.Terraform
+
+	aws *aws.Client
+
+	createStateStore     bool
+	createDiscoveryStore bool
+	stateStoreName       string
+	discoveryStoreName   string
+	stagingStoreName     string
+	region               string
+	zones                []string
 
 	// boskos struct field will be non-nil when the deployer is
 	// using boskos to acquire a GCP project
@@ -106,8 +122,10 @@ type deployer struct {
 var _ types.NewDeployer = New
 
 // assert that deployer implements types.Deployer
-var _ types.Deployer = &deployer{}
-var _ types.DeployerWithPostTester = &deployer{}
+var (
+	_ types.Deployer               = &deployer{}
+	_ types.DeployerWithPostTester = &deployer{}
+)
 
 func (d *deployer) Provider() string {
 	return Name
@@ -142,7 +160,14 @@ func New(opts types.Options) (types.Deployer, *pflag.FlagSet) {
 	fs.MarkDeprecated("control-plane-size", "use --control-plane-count instead")
 
 	// register flags for klog
-	fs.AddGoFlagSet(flag.CommandLine)
+	klogFlags := flag.NewFlagSet("klog", flag.ExitOnError)
+	klog.InitFlags(klogFlags)
+	// Opt into the new klog behavior so that -stderrthreshold is honored even
+	// when -logtostderr=true (the default).
+	// Ref: kubernetes/klog#212, kubernetes/klog#432
+	_ = klogFlags.Set("legacy_stderr_threshold_behavior", "false")
+	_ = klogFlags.Set("stderrthreshold", "INFO")
+	fs.AddGoFlagSet(klogFlags)
 
 	return d, fs
 }

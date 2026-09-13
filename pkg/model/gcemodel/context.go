@@ -20,7 +20,6 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/kops/pkg/apis/kops"
 	"k8s.io/kops/pkg/model"
-	"k8s.io/kops/upup/pkg/fi"
 	"k8s.io/kops/upup/pkg/fi/cloudup/gce"
 	"k8s.io/kops/upup/pkg/fi/cloudup/gcetasks"
 )
@@ -54,7 +53,7 @@ func (c *GCEModelContext) NameForIPAliasRange(key string) string {
 	// but there's a 5 IP alias range limit per subnet anwyay, so
 	// this is rather pointless and in practice we just use a
 	// separate subnet per cluster
-	return c.SafeObjectName(key)
+	return c.SafeSuffixedObjectName(key)
 }
 
 // LinkToSubnet returns a link to the GCE subnet object
@@ -90,6 +89,38 @@ func (c *GCEModelContext) SafeTruncatedClusterName() string {
 // GCETagForRole returns the (network) tag for GCE instances in the given instance group role.
 func (c *GCEModelContext) GCETagForRole(role kops.InstanceGroupRole) string {
 	return gce.TagForRole(c.Cluster.ObjectMeta.Name, role)
+}
+
+// HasAPIServerOnlyInstanceGroups returns true if the cluster has any APIServer-only instance groups.
+func (c *GCEModelContext) HasAPIServerOnlyInstanceGroups() bool {
+	for _, ig := range c.InstanceGroups {
+		if ig.Spec.Role.HasAPIServer() {
+			return true
+		}
+	}
+	return false
+}
+
+// HasEtcdOnlyInstanceGroups returns true if the cluster has any Etcd-only instance groups.
+func (c *GCEModelContext) HasEtcdOnlyInstanceGroups() bool {
+	for _, ig := range c.InstanceGroups {
+		if ig.IsEtcdOnly() {
+			return true
+		}
+	}
+	return false
+}
+
+// GCETagsForAPIServerTargets returns the network tags that should be used as firewall
+// targets for rules that need to reach API server instances. It always includes the
+// ControlPlane tag, and adds the APIServer tag only when the cluster has dedicated
+// APIServer instance groups.
+func (c *GCEModelContext) GCETagsForAPIServerTargets() []string {
+	tags := []string{c.GCETagForRole(kops.InstanceGroupRoleControlPlane)}
+	if c.HasAPIServerOnlyInstanceGroups() {
+		tags = append(tags, c.GCETagForRole(kops.InstanceGroupRoleAPIServer))
+	}
+	return tags
 }
 
 func (c *GCEModelContext) LinkToTargetPool(id string) *gcetasks.TargetPool {
@@ -133,7 +164,7 @@ func (c *GCEModelContext) NameForFirewallRule(id string) string {
 }
 
 func (c *GCEModelContext) NetworkingIsIPAlias() bool {
-	return c.Cluster.Spec.Networking.GCP != nil
+	return gce.UsesIPAliases(c.Cluster)
 }
 
 func (c *GCEModelContext) NetworkingIsGCERoutes() bool {
@@ -148,7 +179,7 @@ func (c *GCEModelContext) LinkToServiceAccount(ig *kops.InstanceGroup) *gcetasks
 		return &gcetasks.ServiceAccount{
 			Name:   s("shared"),
 			Email:  &c.Cluster.Spec.CloudProvider.GCE.ServiceAccount,
-			Shared: fi.PtrTo(true),
+			Shared: new(true),
 		}
 	}
 

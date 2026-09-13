@@ -17,6 +17,9 @@ limitations under the License.
 package awstasks
 
 import (
+	"maps"
+	"slices"
+
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"k8s.io/kops/upup/pkg/fi"
 	"k8s.io/kops/upup/pkg/fi/cloudup/awsup"
@@ -196,10 +199,10 @@ func (t *LaunchTemplate) RenderTerraform(target *terraform.TerraformTarget, a, e
 		EBSOptimized: e.RootVolumeOptimization,
 		ImageID:      image,
 		InstanceType: e.InstanceType,
-		Lifecycle:    &terraform.Lifecycle{CreateBeforeDestroy: fi.PtrTo(true)},
+		Lifecycle:    &terraform.Lifecycle{CreateBeforeDestroy: new(true)},
 		MetadataOptions: &terraformLaunchTemplateInstanceMetadata{
 			// See issue https://github.com/hashicorp/terraform-provider-aws/issues/12564.
-			HTTPEndpoint:            fi.PtrTo("enabled"),
+			HTTPEndpoint:            new("enabled"),
 			HTTPTokens:              e.HTTPTokens,
 			HTTPPutResponseHopLimit: e.HTTPPutResponseHopLimit,
 			HTTPProtocolIPv6:        e.HTTPProtocolIPv6,
@@ -207,7 +210,7 @@ func (t *LaunchTemplate) RenderTerraform(target *terraform.TerraformTarget, a, e
 		NetworkInterfaces: []*terraformLaunchTemplateNetworkInterface{
 			{
 				AssociatePublicIPAddress: e.AssociatePublicIP,
-				DeleteOnTermination:      fi.PtrTo(true),
+				DeleteOnTermination:      new(true),
 				Ipv6AddressCount:         e.IPv6AddressCount,
 			},
 		},
@@ -221,7 +224,7 @@ func (t *LaunchTemplate) RenderTerraform(target *terraform.TerraformTarget, a, e
 		}
 		tf.MarketOptions = []*terraformLaunchTemplateMarketOptions{
 			{
-				MarketType:  fi.PtrTo("spot"),
+				MarketType:  new("spot"),
 				SpotOptions: []*terraformLaunchTemplateMarketOptionsSpotOptions{&marketSpotOptions},
 			},
 		}
@@ -262,69 +265,74 @@ func (t *LaunchTemplate) RenderTerraform(target *terraform.TerraformTarget, a, e
 			}
 		}
 	}
+
 	devices, err := e.buildRootDevice(cloud)
 	if err != nil {
 		return err
 	}
-	for n, x := range devices {
-		tf.BlockDeviceMappings = append(tf.BlockDeviceMappings, &terraformLaunchTemplateBlockDevice{
-			DeviceName: fi.PtrTo(n),
-			EBS: []*terraformLaunchTemplateBlockDeviceEBS{
-				{
-					DeleteOnTermination: fi.PtrTo(true),
-					Encrypted:           x.EbsEncrypted,
-					KmsKeyID:            x.EbsKmsKey,
-					IOPS:                x.EbsVolumeIops,
-					Throughput:          x.EbsVolumeThroughput,
-					VolumeSize:          x.EbsVolumeSize,
-					VolumeType:          fi.PtrTo(string(x.EbsVolumeType)),
-				},
-			},
-		})
+
+	devicesKeys := slices.Sorted(maps.Keys(devices))
+	for _, key := range devicesKeys {
+		terraformLaunchTemplateBlockDevice := createTerraformLaunchTemplateBlockDevice(key, devices[key])
+		tf.BlockDeviceMappings = append(tf.BlockDeviceMappings, terraformLaunchTemplateBlockDevice)
 	}
+
 	additionals, err := buildAdditionalDevices(e.BlockDeviceMappings)
 	if err != nil {
 		return err
 	}
-	for n, x := range additionals {
-		tf.BlockDeviceMappings = append(tf.BlockDeviceMappings, &terraformLaunchTemplateBlockDevice{
-			DeviceName: fi.PtrTo(n),
-			EBS: []*terraformLaunchTemplateBlockDeviceEBS{
-				{
-					DeleteOnTermination: fi.PtrTo(true),
-					Encrypted:           x.EbsEncrypted,
-					IOPS:                x.EbsVolumeIops,
-					Throughput:          x.EbsVolumeThroughput,
-					KmsKeyID:            x.EbsKmsKey,
-					VolumeSize:          x.EbsVolumeSize,
-					VolumeType:          fi.PtrTo(string(x.EbsVolumeType)),
-				},
-			},
-		})
+
+	additionalsKeys := slices.Sorted(maps.Keys(additionals))
+	for _, key := range additionalsKeys {
+		terraformLaunchTemplateBlockDevice := createTerraformLaunchTemplateBlockDevice(key, additionals[key])
+		tf.BlockDeviceMappings = append(tf.BlockDeviceMappings, terraformLaunchTemplateBlockDevice)
 	}
 
 	devices, err = buildEphemeralDevices(cloud, fi.ValueOf(e.InstanceType))
 	if err != nil {
 		return err
 	}
-	for n, x := range devices {
+
+	devicesKeys = slices.Sorted(maps.Keys(devices))
+	for _, key := range devicesKeys {
 		tf.BlockDeviceMappings = append(tf.BlockDeviceMappings, &terraformLaunchTemplateBlockDevice{
-			VirtualName: x.VirtualName,
-			DeviceName:  fi.PtrTo(n),
+			VirtualName: devices[key].VirtualName,
+			DeviceName:  new(key),
 		})
 	}
 
 	if e.Tags != nil {
 		tf.TagSpecifications = append(tf.TagSpecifications, &terraformLaunchTemplateTagSpecification{
-			ResourceType: fi.PtrTo("instance"),
+			ResourceType: new("instance"),
 			Tags:         e.Tags,
 		})
 		tf.TagSpecifications = append(tf.TagSpecifications, &terraformLaunchTemplateTagSpecification{
-			ResourceType: fi.PtrTo("volume"),
+			ResourceType: new("volume"),
+			Tags:         e.Tags,
+		})
+		tf.TagSpecifications = append(tf.TagSpecifications, &terraformLaunchTemplateTagSpecification{
+			ResourceType: new("network-interface"),
 			Tags:         e.Tags,
 		})
 		tf.Tags = e.Tags
 	}
 
 	return target.RenderResource("aws_launch_template", fi.ValueOf(e.Name), tf)
+}
+
+func createTerraformLaunchTemplateBlockDevice(deviceName string, v *BlockDeviceMapping) *terraformLaunchTemplateBlockDevice {
+	return &terraformLaunchTemplateBlockDevice{
+		DeviceName: new(deviceName),
+		EBS: []*terraformLaunchTemplateBlockDeviceEBS{
+			{
+				DeleteOnTermination: new(true),
+				Encrypted:           v.EbsEncrypted,
+				KmsKeyID:            v.EbsKmsKey,
+				IOPS:                v.EbsVolumeIops,
+				Throughput:          v.EbsVolumeThroughput,
+				VolumeSize:          v.EbsVolumeSize,
+				VolumeType:          new(string(v.EbsVolumeType)),
+			},
+		},
+	}
 }

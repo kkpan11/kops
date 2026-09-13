@@ -4,11 +4,8 @@ package eventbridge
 
 import (
 	"context"
-	"fmt"
-	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/service/eventbridge/types"
 	"github.com/aws/smithy-go/middleware"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
 // Creates or updates the specified rule. Rules are enabled by default, or based
@@ -65,11 +62,15 @@ import (
 // that you use budgeting, which alerts you when charges exceed your specified
 // limit. For more information, see [Managing Your Costs with Budgets].
 //
+// To create a rule that filters for management events from Amazon Web Services
+// services, see [Receiving read-only management events from Amazon Web Services services]in the EventBridge User Guide.
+//
 // [CreateEventBus]: https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_CreateEventBus.html
 // [TagResource]: https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_TagResource.html
 // [UntagResource]: https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_UntagResource.html
 // [DisableRule]: https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_DisableRule.html
 // [Managing Your Costs with Budgets]: https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/budgets-managing-costs.html
+// [Receiving read-only management events from Amazon Web Services services]: https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-service-event-cloudtrail.html#eb-service-event-cloudtrail-management
 func (c *Client) PutRule(ctx context.Context, params *PutRuleInput, optFns ...func(*Options)) (*PutRuleOutput, error) {
 	if params == nil {
 		params = &PutRuleInput{}
@@ -163,9 +164,6 @@ type PutRuleOutput struct {
 }
 
 func (c *Client) addOperationPutRuleMiddlewares(stack *middleware.Stack, options Options) (err error) {
-	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
-		return err
-	}
 	err = stack.Serialize.Add(&awsAwsjson11_serializeOpPutRule{}, middleware.After)
 	if err != nil {
 		return err
@@ -174,19 +172,7 @@ func (c *Client) addOperationPutRuleMiddlewares(stack *middleware.Stack, options
 	if err != nil {
 		return err
 	}
-	if err := addProtocolFinalizerMiddlewares(stack, options, "PutRule"); err != nil {
-		return fmt.Errorf("add protocol finalizers: %v", err)
-	}
 
-	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
-		return err
-	}
-	if err = addSetLoggerMiddleware(stack, options); err != nil {
-		return err
-	}
-	if err = addClientRequestID(stack); err != nil {
-		return err
-	}
 	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
@@ -196,40 +182,13 @@ func (c *Client) addOperationPutRuleMiddlewares(stack *middleware.Stack, options
 	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetry(stack, options); err != nil {
+	if err = addRecordResponseTiming(stack, options); err != nil {
 		return err
 	}
-	if err = addRawResponseToMetadata(stack); err != nil {
-		return err
-	}
-	if err = addRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack, options); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addTimeOffsetBuild(stack, c); err != nil {
-		return err
-	}
-	if err = addUserAgentRetryMode(stack, options); err != nil {
+	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
 	if err = addOpPutRuleValidationMiddleware(stack); err != nil {
-		return err
-	}
-	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opPutRule(options.Region), middleware.Before); err != nil {
-		return err
-	}
-	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -244,13 +203,8 @@ func (c *Client) addOperationPutRuleMiddlewares(stack *middleware.Stack, options
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
-	return nil
-}
-
-func newServiceMetadataMiddleware_opPutRule(region string) *awsmiddleware.RegisterServiceMetadata {
-	return &awsmiddleware.RegisterServiceMetadata{
-		Region:        region,
-		ServiceID:     ServiceID,
-		OperationName: "PutRule",
+	if err = addInterceptors(stack, options); err != nil {
+		return err
 	}
+	return nil
 }

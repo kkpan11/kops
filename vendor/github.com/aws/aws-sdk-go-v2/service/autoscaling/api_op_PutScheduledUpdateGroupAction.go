@@ -4,10 +4,7 @@ package autoscaling
 
 import (
 	"context"
-	"fmt"
-	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/smithy-go/middleware"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
 	"time"
 )
 
@@ -15,13 +12,15 @@ import (
 //
 // For more information, see [Scheduled scaling] in the Amazon EC2 Auto Scaling User Guide.
 //
-// You can view the scheduled actions for an Auto Scaling group using the DescribeScheduledActions API
+// You can view the scheduled actions for an Auto Scaling group using the [DescribeScheduledActions] API
 // call. If you are no longer using a scheduled action, you can delete it by
-// calling the DeleteScheduledActionAPI.
+// calling the [DeleteScheduledAction]API.
 //
 // If you try to schedule your action in the past, Amazon EC2 Auto Scaling returns
 // an error message.
 //
+// [DeleteScheduledAction]: https://docs.aws.amazon.com/autoscaling/ec2/APIReference/API_DeleteScheduledAction.html
+// [DescribeScheduledActions]: https://docs.aws.amazon.com/autoscaling/ec2/APIReference/API_DescribeScheduledActions.html
 // [Scheduled scaling]: https://docs.aws.amazon.com/autoscaling/ec2/userguide/ec2-auto-scaling-scheduled-scaling.html
 func (c *Client) PutScheduledUpdateGroupAction(ctx context.Context, params *PutScheduledUpdateGroupActionInput, optFns ...func(*Options)) (*PutScheduledUpdateGroupActionOutput, error) {
 	if params == nil {
@@ -113,9 +112,6 @@ type PutScheduledUpdateGroupActionOutput struct {
 }
 
 func (c *Client) addOperationPutScheduledUpdateGroupActionMiddlewares(stack *middleware.Stack, options Options) (err error) {
-	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
-		return err
-	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpPutScheduledUpdateGroupAction{}, middleware.After)
 	if err != nil {
 		return err
@@ -124,19 +120,7 @@ func (c *Client) addOperationPutScheduledUpdateGroupActionMiddlewares(stack *mid
 	if err != nil {
 		return err
 	}
-	if err := addProtocolFinalizerMiddlewares(stack, options, "PutScheduledUpdateGroupAction"); err != nil {
-		return fmt.Errorf("add protocol finalizers: %v", err)
-	}
 
-	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
-		return err
-	}
-	if err = addSetLoggerMiddleware(stack, options); err != nil {
-		return err
-	}
-	if err = addClientRequestID(stack); err != nil {
-		return err
-	}
 	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
@@ -146,40 +130,13 @@ func (c *Client) addOperationPutScheduledUpdateGroupActionMiddlewares(stack *mid
 	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetry(stack, options); err != nil {
+	if err = addRecordResponseTiming(stack, options); err != nil {
 		return err
 	}
-	if err = addRawResponseToMetadata(stack); err != nil {
-		return err
-	}
-	if err = addRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack, options); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addTimeOffsetBuild(stack, c); err != nil {
-		return err
-	}
-	if err = addUserAgentRetryMode(stack, options); err != nil {
+	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
 	if err = addOpPutScheduledUpdateGroupActionValidationMiddleware(stack); err != nil {
-		return err
-	}
-	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opPutScheduledUpdateGroupAction(options.Region), middleware.Before); err != nil {
-		return err
-	}
-	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -194,13 +151,8 @@ func (c *Client) addOperationPutScheduledUpdateGroupActionMiddlewares(stack *mid
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
-	return nil
-}
-
-func newServiceMetadataMiddleware_opPutScheduledUpdateGroupAction(region string) *awsmiddleware.RegisterServiceMetadata {
-	return &awsmiddleware.RegisterServiceMetadata{
-		Region:        region,
-		ServiceID:     ServiceID,
-		OperationName: "PutScheduledUpdateGroupAction",
+	if err = addInterceptors(stack, options); err != nil {
+		return err
 	}
+	return nil
 }

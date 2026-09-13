@@ -4,10 +4,7 @@ package ssm
 
 import (
 	"context"
-	"fmt"
-	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/smithy-go/middleware"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
 // ServiceSetting is an account-level setting for an Amazon Web Services service.
@@ -48,15 +45,19 @@ type UpdateServiceSettingInput struct {
 	// arn:aws:ssm:us-east-1:111122223333:servicesetting/ssm/parameter-store/high-throughput-enabled
 	// . The setting ID can be one of the following.
 	//
-	//   - /ssm/managed-instance/default-ec2-instance-management-role
+	//   - /ssm/appmanager/appmanager-enabled
 	//
 	//   - /ssm/automation/customer-script-log-destination
 	//
 	//   - /ssm/automation/customer-script-log-group-name
 	//
+	//   - /ssm/automation/enable-adaptive-concurrency
+	//
 	//   - /ssm/documents/console/public-sharing-permission
 	//
 	//   - /ssm/managed-instance/activation-tier
+	//
+	//   - /ssm/managed-instance/default-ec2-instance-management-role
 	//
 	//   - /ssm/opsinsights/opscenter
 	//
@@ -75,8 +76,7 @@ type UpdateServiceSettingInput struct {
 	// The new value to specify for the service setting. The following list specifies
 	// the available values for each setting.
 	//
-	//   - For /ssm/managed-instance/default-ec2-instance-management-role , enter the
-	//   name of an IAM role.
+	//   - For /ssm/appmanager/appmanager-enabled , enter True or False .
 	//
 	//   - For /ssm/automation/customer-script-log-destination , enter CloudWatch .
 	//
@@ -87,6 +87,9 @@ type UpdateServiceSettingInput struct {
 	//   Disable .
 	//
 	//   - For /ssm/managed-instance/activation-tier , enter standard or advanced .
+	//
+	//   - For /ssm/managed-instance/default-ec2-instance-management-role , enter the
+	//   name of an IAM role.
 	//
 	//   - For /ssm/opsinsights/opscenter , enter Enabled or Disabled .
 	//
@@ -110,9 +113,6 @@ type UpdateServiceSettingOutput struct {
 }
 
 func (c *Client) addOperationUpdateServiceSettingMiddlewares(stack *middleware.Stack, options Options) (err error) {
-	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
-		return err
-	}
 	err = stack.Serialize.Add(&awsAwsjson11_serializeOpUpdateServiceSetting{}, middleware.After)
 	if err != nil {
 		return err
@@ -121,19 +121,7 @@ func (c *Client) addOperationUpdateServiceSettingMiddlewares(stack *middleware.S
 	if err != nil {
 		return err
 	}
-	if err := addProtocolFinalizerMiddlewares(stack, options, "UpdateServiceSetting"); err != nil {
-		return fmt.Errorf("add protocol finalizers: %v", err)
-	}
 
-	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
-		return err
-	}
-	if err = addSetLoggerMiddleware(stack, options); err != nil {
-		return err
-	}
-	if err = addClientRequestID(stack); err != nil {
-		return err
-	}
 	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
@@ -143,40 +131,13 @@ func (c *Client) addOperationUpdateServiceSettingMiddlewares(stack *middleware.S
 	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetry(stack, options); err != nil {
+	if err = addRecordResponseTiming(stack, options); err != nil {
 		return err
 	}
-	if err = addRawResponseToMetadata(stack); err != nil {
-		return err
-	}
-	if err = addRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack, options); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addTimeOffsetBuild(stack, c); err != nil {
-		return err
-	}
-	if err = addUserAgentRetryMode(stack, options); err != nil {
+	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
 	if err = addOpUpdateServiceSettingValidationMiddleware(stack); err != nil {
-		return err
-	}
-	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opUpdateServiceSetting(options.Region), middleware.Before); err != nil {
-		return err
-	}
-	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -191,13 +152,8 @@ func (c *Client) addOperationUpdateServiceSettingMiddlewares(stack *middleware.S
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
-	return nil
-}
-
-func newServiceMetadataMiddleware_opUpdateServiceSetting(region string) *awsmiddleware.RegisterServiceMetadata {
-	return &awsmiddleware.RegisterServiceMetadata{
-		Region:        region,
-		ServiceID:     ServiceID,
-		OperationName: "UpdateServiceSetting",
+	if err = addInterceptors(stack, options); err != nil {
+		return err
 	}
+	return nil
 }

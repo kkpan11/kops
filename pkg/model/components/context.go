@@ -24,9 +24,9 @@ import (
 	"strings"
 
 	"k8s.io/kops/pkg/apis/kops"
+	kopsmodel "k8s.io/kops/pkg/apis/kops/model"
 	"k8s.io/kops/pkg/apis/kops/util"
 	"k8s.io/kops/pkg/assets"
-	"k8s.io/kops/pkg/k8sversion"
 	"k8s.io/kops/upup/pkg/fi"
 	"k8s.io/kops/util/pkg/vfs"
 
@@ -38,15 +38,59 @@ import (
 type OptionsContext struct {
 	ClusterName string
 
+	// Deprecated: Prefer using NodeKubernetesVersion() and ControlPlaneKubernetesVersion()
 	KubernetesVersion semver.Version
 
 	AssetBuilder *assets.AssetBuilder
+
+	nodeKubernetesVersion         kopsmodel.KubernetesVersion
+	controlPlaneKubernetesVersion kopsmodel.KubernetesVersion
 }
 
+func NewOptionsContext(cluster *kops.Cluster, assetBuilder *assets.AssetBuilder, maxKubeletSupportedVersion string) (*OptionsContext, error) {
+	optionsContext := &OptionsContext{
+		ClusterName:  cluster.ObjectMeta.Name,
+		AssetBuilder: assetBuilder,
+	}
+
+	sv, err := util.ParseKubernetesVersion(cluster.Spec.KubernetesVersion)
+	if err != nil {
+		return nil, fmt.Errorf("unable to determine kubernetes version from %q", cluster.Spec.KubernetesVersion)
+	}
+	optionsContext.KubernetesVersion = *sv
+
+	controlPlaneKubernetesVersion, err := kopsmodel.ParseKubernetesVersion(cluster.Spec.KubernetesVersion)
+	if err != nil {
+		return nil, fmt.Errorf("unable to determine kubernetes version from %q: %w", cluster.Spec.KubernetesVersion, err)
+	}
+	nodeKubernetesVersion := controlPlaneKubernetesVersion
+	if maxKubeletSupportedVersion != "" {
+		nodeKubernetesVersion, err = kopsmodel.ParseKubernetesVersion(maxKubeletSupportedVersion)
+		if err != nil {
+			return nil, fmt.Errorf("unable to determine kubernetes version from %q: %w", maxKubeletSupportedVersion, err)
+		}
+	}
+
+	optionsContext.nodeKubernetesVersion = *nodeKubernetesVersion
+	optionsContext.controlPlaneKubernetesVersion = *controlPlaneKubernetesVersion
+
+	return optionsContext, nil
+}
+
+func (c *OptionsContext) NodeKubernetesVersion() kopsmodel.KubernetesVersion {
+	return c.nodeKubernetesVersion
+}
+
+func (c *OptionsContext) ControlPlaneKubernetesVersion() kopsmodel.KubernetesVersion {
+	return c.controlPlaneKubernetesVersion
+}
+
+// Deprecated: prefer using NodeKubernetesVersion() and ControlPlaneKubernetesVersion()
 func (c *OptionsContext) IsKubernetesGTE(version string) bool {
 	return util.IsKubernetesGTE(version, c.KubernetesVersion)
 }
 
+// Deprecated: prefer using NodeKubernetesVersion() and ControlPlaneKubernetesVersion()
 func (c *OptionsContext) IsKubernetesLT(version string) bool {
 	return !c.IsKubernetesGTE(version)
 }
@@ -89,31 +133,23 @@ func WellKnownServiceIP(networkingSpec *kops.NetworkingSpec, id int) (net.IP, er
 	return nil, fmt.Errorf("unexpected IP address type for ServiceClusterIPRange: %s", networkingSpec.ServiceClusterIPRange)
 }
 
-func IsBaseURL(kubernetesVersion string) bool {
-	return strings.HasPrefix(kubernetesVersion, "http:") || strings.HasPrefix(kubernetesVersion, "https:") || strings.HasPrefix(kubernetesVersion, "memfs:")
-}
-
 // Image returns the docker image name for the specified component
 func Image(component string, clusterSpec *kops.ClusterSpec, assetsBuilder *assets.AssetBuilder) (string, error) {
 	if assetsBuilder == nil {
 		return "", fmt.Errorf("unable to parse assets as assetBuilder is not defined")
 	}
 
-	kubernetesVersion, err := k8sversion.Parse(clusterSpec.KubernetesVersion)
+	kubernetesVersion, err := kopsmodel.ParseKubernetesVersion(clusterSpec.KubernetesVersion)
 	if err != nil {
 		return "", err
 	}
 
 	imageName := component
 
-	if !IsBaseURL(clusterSpec.KubernetesVersion) {
+	if !kubernetesVersion.IsBaseURL() {
 		image := "registry.k8s.io/" + imageName + ":" + "v" + kubernetesVersion.String()
 
-		image, err := assetsBuilder.RemapImage(image)
-		if err != nil {
-			return "", fmt.Errorf("unable to remap container %q: %v", image, err)
-		}
-		return image, nil
+		return assetsBuilder.RemapImage(image), nil
 	}
 
 	// The simple name is valid when pulling.  But if we

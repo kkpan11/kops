@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/kops/pkg/commands/commandutils"
 	"k8s.io/kops/upup/pkg/fi/cloudup"
 	"k8s.io/kubectl/pkg/util/i18n"
@@ -33,8 +34,6 @@ import (
 	"github.com/spf13/cobra"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 	"k8s.io/kops/cmd/kops/util"
 	kopsapi "k8s.io/kops/pkg/apis/kops"
@@ -62,17 +61,29 @@ var (
 )
 
 type ValidateClusterOptions struct {
-	ClusterName string
-	output      string
-	wait        time.Duration
-	count       int
-	interval    time.Duration
-	kubeconfig  string
+	ClusterName        string
+	InstanceGroupRoles []kopsapi.InstanceGroupRole
+	output             string
+	wait               time.Duration
+	count              int
+	interval           time.Duration
+	kubeconfig         string
+
+	MaxUnreadyNodes int
+
+	// filterInstanceGroups is a function that returns true if the instance group should be validated
+	filterInstanceGroups func(ig *kopsapi.InstanceGroup) bool
+
+	// filterPodsForValidation is a function that returns true if the pod should be validated
+	filterPodsForValidation func(pod *v1.Pod) bool
+
+	ExportKubeconfigOptions
 }
 
 func (o *ValidateClusterOptions) InitDefaults() {
 	o.output = OutputTable
 	o.interval = 10 * time.Second
+	o.MaxUnreadyNodes = 0
 }
 
 func NewCmdValidateCluster(f *util.Factory, out io.Writer) *cobra.Command {
@@ -109,6 +120,9 @@ func NewCmdValidateCluster(f *util.Factory, out io.Writer) *cobra.Command {
 	cmd.Flags().IntVar(&options.count, "count", options.count, "Number of consecutive successful validations required")
 	cmd.Flags().DurationVar(&options.interval, "interval", options.interval, "Time in duration to wait between validation attempts")
 	cmd.Flags().StringVar(&options.kubeconfig, "kubeconfig", "", "Path to the kubeconfig file")
+	cmd.Flags().IntVar(&options.MaxUnreadyNodes, "max-unready-nodes", options.MaxUnreadyNodes, "The maximum number of non-ready worker nodes tolerated during validation")
+
+	options.CreateKubecfgOptions.AddCommonFlags(cmd.Flags())
 
 	return cmd
 }
@@ -148,27 +162,24 @@ func RunValidateCluster(ctx context.Context, f *util.Factory, out io.Writer, opt
 		return nil, fmt.Errorf("no InstanceGroup objects found")
 	}
 
-	// TODO: Refactor into util.Factory
-	contextName := cluster.ObjectMeta.Name
-	configLoadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
-	if options.kubeconfig != "" {
-		configLoadingRules.ExplicitPath = options.kubeconfig
-	}
-	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-		configLoadingRules,
-		&clientcmd.ConfigOverrides{CurrentContext: contextName}).ClientConfig()
+	restConfig, err := f.RESTConfig(ctx, cluster, options.CreateKubecfgOptions)
 	if err != nil {
-		return nil, fmt.Errorf("cannot load kubecfg settings for %q: %v", contextName, err)
+		return nil, fmt.Errorf("getting rest config: %w", err)
 	}
 
-	k8sClient, err := kubernetes.NewForConfig(config)
+	httpClient, err := f.HTTPClient(restConfig)
 	if err != nil {
-		return nil, fmt.Errorf("cannot build kubernetes api client for %q: %v", contextName, err)
+		return nil, fmt.Errorf("getting http client: %w", err)
+	}
+
+	k8sClient, err := kubernetes.NewForConfigAndClient(restConfig, httpClient)
+	if err != nil {
+		return nil, fmt.Errorf("building kubernetes client: %w", err)
 	}
 
 	timeout := time.Now().Add(options.wait)
 
-	validator, err := validation.NewClusterValidator(cluster, cloud, list, config.Host, k8sClient)
+	validator, err := validation.NewClusterValidator(cluster, cloud, list, options.filterInstanceGroups, options.filterPodsForValidation, options.MaxUnreadyNodes, restConfig, k8sClient)
 	if err != nil {
 		return nil, fmt.Errorf("unexpected error creating validatior: %v", err)
 	}
@@ -179,7 +190,7 @@ func RunValidateCluster(ctx context.Context, f *util.Factory, out io.Writer, opt
 			return nil, fmt.Errorf("wait time exceeded during validation")
 		}
 
-		result, err := validator.Validate()
+		result, err := validator.Validate(ctx)
 		if err != nil {
 			consecutive = 0
 			if options.wait > 0 {

@@ -19,10 +19,12 @@ package model
 import (
 	"context"
 	"fmt"
+	"net"
 	"path/filepath"
 	"sort"
 	"strings"
 
+	"k8s.io/klog/v2"
 	"k8s.io/kops/pkg/apis/kops"
 	"k8s.io/kops/pkg/flagbuilder"
 	"k8s.io/kops/pkg/k8scodecs"
@@ -34,7 +36,7 @@ import (
 	"k8s.io/kops/pkg/wellknownusers"
 	"k8s.io/kops/upup/pkg/fi"
 	"k8s.io/kops/upup/pkg/fi/nodeup/nodetasks"
-	"k8s.io/kops/util/pkg/proxy"
+	"k8s.io/kops/util/pkg/env"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -77,13 +79,62 @@ func (b *KubeAPIServerBuilder) Build(c *fi.NodeupModelBuilderContext) error {
 		}
 	}
 
+	if b.CloudProvider() == kops.CloudProviderMetal {
+		// Workaround for https://github.com/kubernetes/kubernetes/issues/111671
+		if b.IsIPv6Only() {
+			interfaces, err := net.Interfaces()
+			if err != nil {
+				return fmt.Errorf("getting local network interfaces: %w", err)
+			}
+			var ipv6s []net.IP
+			for _, intf := range interfaces {
+				addresses, err := intf.Addrs()
+				if err != nil {
+					return fmt.Errorf("getting addresses for network interface %q: %w", intf.Name, err)
+				}
+				for _, addr := range addresses {
+					ip, _, err := net.ParseCIDR(addr.String())
+					if ip == nil {
+						return fmt.Errorf("parsing ip address %q (bound to network %q): %w", addr.String(), intf.Name, err)
+					}
+					if ip.To4() != nil {
+						// We're only looking for ipv6
+						continue
+					}
+					if ip.IsLinkLocalUnicast() {
+						klog.V(4).Infof("ignoring link-local unicast addr %v", addr)
+						continue
+					}
+					if ip.IsLinkLocalMulticast() {
+						klog.V(4).Infof("ignoring link-local multicast addr %v", addr)
+						continue
+					}
+					if ip.IsLoopback() {
+						klog.V(4).Infof("ignoring loopback addr %v", addr)
+						continue
+					}
+					ipv6s = append(ipv6s, ip)
+				}
+			}
+			if len(ipv6s) > 1 {
+				klog.Warningf("found multiple ipv6s, choosing first: %v", ipv6s)
+			}
+			if len(ipv6s) == 0 {
+				klog.Warningf("did not find ipv6 address for kube-apiserver --advertise-address")
+			}
+			if len(ipv6s) > 0 {
+				kubeAPIServer.AdvertiseAddress = ipv6s[0].String()
+			}
+		}
+	}
+
 	b.configureOIDC(&kubeAPIServer)
 	if err := b.writeAuthenticationConfig(c, &kubeAPIServer); err != nil {
 		return err
 	}
 
 	if b.NodeupConfig.APIServerConfig.EncryptionConfigSecretHash != "" {
-		encryptionConfigPath := fi.PtrTo(filepath.Join(pathSrvKAPI, "encryptionconfig.yaml"))
+		encryptionConfigPath := new(filepath.Join(pathSrvKAPI, "encryptionconfig.yaml"))
 
 		kubeAPIServer.EncryptionProviderConfig = encryptionConfigPath
 
@@ -94,7 +145,7 @@ func (b *KubeAPIServerBuilder) Build(c *fi.NodeupModelBuilderContext) error {
 			t := &nodetasks.File{
 				Path:     *encryptionConfigPath,
 				Contents: fi.NewStringResource(contents),
-				Mode:     fi.PtrTo("600"),
+				Mode:     new("600"),
 				Type:     nodetasks.FileType_File,
 			}
 			c.AddTask(t)
@@ -125,7 +176,7 @@ func (b *KubeAPIServerBuilder) Build(c *fi.NodeupModelBuilderContext) error {
 			Path:     filepath.Join(pathSrvKAPI, "etcd-ca.crt"),
 			Contents: fi.NewStringResource(b.NodeupConfig.CAs["etcd-clients-ca"]),
 			Type:     nodetasks.FileType_File,
-			Mode:     fi.PtrTo("0644"),
+			Mode:     new("0644"),
 		})
 		kubeAPIServer.EtcdCAFile = filepath.Join(pathSrvKAPI, "etcd-ca.crt")
 
@@ -151,7 +202,7 @@ func (b *KubeAPIServerBuilder) Build(c *fi.NodeupModelBuilderContext) error {
 			Path:     filepath.Join(pathSrvKAPI, "apiserver-aggregator-ca.crt"),
 			Contents: fi.NewStringResource(b.NodeupConfig.CAs["apiserver-aggregator-ca"]),
 			Type:     nodetasks.FileType_File,
-			Mode:     fi.PtrTo("0644"),
+			Mode:     new("0644"),
 		})
 		kubeAPIServer.RequestheaderClientCAFile = filepath.Join(pathSrvKAPI, "apiserver-aggregator-ca.crt")
 
@@ -168,8 +219,8 @@ func (b *KubeAPIServerBuilder) Build(c *fi.NodeupModelBuilderContext) error {
 		if err != nil {
 			return err
 		}
-		kubeAPIServer.ProxyClientCertFile = fi.PtrTo(filepath.Join(pathSrvKAPI, "apiserver-aggregator.crt"))
-		kubeAPIServer.ProxyClientKeyFile = fi.PtrTo(filepath.Join(pathSrvKAPI, "apiserver-aggregator.key"))
+		kubeAPIServer.ProxyClientCertFile = new(filepath.Join(pathSrvKAPI, "apiserver-aggregator.crt"))
+		kubeAPIServer.ProxyClientKeyFile = new(filepath.Join(pathSrvKAPI, "apiserver-aggregator.key"))
 	}
 
 	if err := b.writeServerCertificate(c, &kubeAPIServer); err != nil {
@@ -294,7 +345,7 @@ func (b *KubeAPIServerBuilder) writeAuthenticationConfig(c *fi.NodeupModelBuilde
 
 	if b.NodeupConfig.APIServerConfig.Authentication.AWS != nil {
 		id := "aws-iam-authenticator"
-		kubeAPIServer.AuthenticationTokenWebhookConfigFile = fi.PtrTo(PathAuthnConfig)
+		kubeAPIServer.AuthenticationTokenWebhookConfigFile = new(PathAuthnConfig)
 
 		{
 			cluster := kubeconfig.KubectlCluster{
@@ -329,7 +380,7 @@ func (b *KubeAPIServerBuilder) writeAuthenticationConfig(c *fi.NodeupModelBuilde
 				Path:     PathAuthnConfig,
 				Contents: fi.NewBytesResource(manifest),
 				Type:     nodetasks.FileType_File,
-				Mode:     fi.PtrTo("600"),
+				Mode:     new("600"),
 			})
 		}
 
@@ -364,18 +415,18 @@ func (b *KubeAPIServerBuilder) writeAuthenticationConfig(c *fi.NodeupModelBuilde
 				Path:     "/srv/kubernetes/aws-iam-authenticator/cert.pem",
 				Contents: certificate,
 				Type:     nodetasks.FileType_File,
-				Mode:     fi.PtrTo("600"),
-				Owner:    fi.PtrTo("aws-iam-authenticator"),
-				Group:    fi.PtrTo("aws-iam-authenticator"),
+				Mode:     new("600"),
+				Owner:    new("aws-iam-authenticator"),
+				Group:    new("aws-iam-authenticator"),
 			})
 
 			c.AddTask(&nodetasks.File{
 				Path:     "/srv/kubernetes/aws-iam-authenticator/key.pem",
 				Contents: privateKey,
 				Type:     nodetasks.FileType_File,
-				Mode:     fi.PtrTo("600"),
-				Owner:    fi.PtrTo("aws-iam-authenticator"),
-				Group:    fi.PtrTo("aws-iam-authenticator"),
+				Mode:     new("600"),
+				Owner:    new("aws-iam-authenticator"),
+				Group:    new("aws-iam-authenticator"),
 			})
 		}
 
@@ -543,12 +594,16 @@ func (b *KubeAPIServerBuilder) buildPod(ctx context.Context, kubeAPIServer *kops
 		clusterName := b.NodeupConfig.ClusterName
 		mainEtcdDNSName := "main.etcd.internal." + clusterName
 		eventsEtcdDNSName := "events.etcd.internal." + clusterName
+		leasesEtcdDNSName := "leases.etcd.internal." + clusterName
 		for i := range kubeAPIServer.EtcdServers {
 			kubeAPIServer.EtcdServers[i] = strings.ReplaceAll(kubeAPIServer.EtcdServers[i], "127.0.0.1", mainEtcdDNSName)
 		}
 		for i := range kubeAPIServer.EtcdServersOverrides {
 			if strings.HasPrefix(kubeAPIServer.EtcdServersOverrides[i], "/events") {
 				kubeAPIServer.EtcdServersOverrides[i] = strings.ReplaceAll(kubeAPIServer.EtcdServersOverrides[i], "127.0.0.1", eventsEtcdDNSName)
+			}
+			if strings.HasPrefix(kubeAPIServer.EtcdServersOverrides[i], "coordination.k8s.io/leases") {
+				kubeAPIServer.EtcdServersOverrides[i] = strings.ReplaceAll(kubeAPIServer.EtcdServersOverrides[i], "127.0.0.1", leasesEtcdDNSName)
 			}
 		}
 	}
@@ -573,8 +628,6 @@ func (b *KubeAPIServerBuilder) buildPod(ctx context.Context, kubeAPIServer *kops
 		return nil, fmt.Errorf("error building kube-apiserver flags: %v", err)
 	}
 
-	flags = append(flags, fmt.Sprintf("--cloud-config=%s", InTreeCloudConfigFilePath))
-
 	pod := &v1.Pod{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
@@ -595,20 +648,66 @@ func (b *KubeAPIServerBuilder) buildPod(ctx context.Context, kubeAPIServer *kops
 
 	useHealthcheckProxy := b.findHealthcheckManifest() != nil
 
-	probeAction := &v1.HTTPGetAction{
-		Host: "127.0.0.1",
-		Path: "/healthz",
-		Port: intstr.FromInt(wellknownports.KubeAPIServerHealthCheck),
+	livenessProbe := &v1.Probe{
+		ProbeHandler: v1.ProbeHandler{
+			HTTPGet: &v1.HTTPGetAction{
+				Host: "127.0.0.1",
+				Path: "/livez",
+				Port: intstr.FromInt(wellknownports.KubeAPIServerHealthCheck),
+			},
+		},
+		InitialDelaySeconds: 10,
+		TimeoutSeconds:      15,
+		FailureThreshold:    8,
+		PeriodSeconds:       10,
+	}
+
+	readinessProbe := &v1.Probe{
+		ProbeHandler: v1.ProbeHandler{
+			HTTPGet: &v1.HTTPGetAction{
+				Host: "127.0.0.1",
+				Path: "/healthz",
+				Port: intstr.FromInt(wellknownports.KubeAPIServerHealthCheck),
+			},
+		},
+		InitialDelaySeconds: 0,
+		TimeoutSeconds:      15,
+		FailureThreshold:    3,
+		PeriodSeconds:       1,
+	}
+
+	startupProbe := &v1.Probe{
+		ProbeHandler: v1.ProbeHandler{
+			HTTPGet: &v1.HTTPGetAction{
+				Host: "127.0.0.1",
+				Path: "/livez",
+				Port: intstr.FromInt(wellknownports.KubeAPIServerHealthCheck),
+			},
+		},
+		InitialDelaySeconds: 10,
+		TimeoutSeconds:      5 * 60,
+		FailureThreshold:    5 * 60 / 10,
+		PeriodSeconds:       10,
+	}
+
+	allProbes := []*v1.Probe{
+		startupProbe,
+		livenessProbe,
+		readinessProbe,
 	}
 
 	insecurePort := fi.ValueOf(kubeAPIServer.InsecurePort)
 	if useHealthcheckProxy {
 		// kube-apiserver-healthcheck sidecar container runs on port 3990
 	} else if insecurePort != 0 {
-		probeAction.Port = intstr.FromInt(int(insecurePort))
+		for _, probe := range allProbes {
+			probe.HTTPGet.Port = intstr.FromInt(int(insecurePort))
+		}
 	} else if kubeAPIServer.SecurePort != 0 {
-		probeAction.Port = intstr.FromInt(int(kubeAPIServer.SecurePort))
-		probeAction.Scheme = v1.URISchemeHTTPS
+		for _, probe := range allProbes {
+			probe.HTTPGet.Port = intstr.FromInt(int(kubeAPIServer.SecurePort))
+			probe.HTTPGet.Scheme = v1.URISchemeHTTPS
+		}
 	}
 
 	resourceRequests := v1.ResourceList{}
@@ -635,16 +734,12 @@ func (b *KubeAPIServerBuilder) buildPod(ctx context.Context, kubeAPIServer *kops
 	image := b.RemapImage(kubeAPIServer.Image)
 
 	container := &v1.Container{
-		Name:  "kube-apiserver",
-		Image: image,
-		Env:   proxy.GetProxyEnvVars(b.NodeupConfig.Networking.EgressProxy),
-		LivenessProbe: &v1.Probe{
-			ProbeHandler: v1.ProbeHandler{
-				HTTPGet: probeAction,
-			},
-			InitialDelaySeconds: 45,
-			TimeoutSeconds:      15,
-		},
+		Name:           "kube-apiserver",
+		Image:          image,
+		Env:            append(kubeAPIServer.Env, env.GetProxyEnvVars(b.NodeupConfig.Networking.EgressProxy)...),
+		LivenessProbe:  livenessProbe,
+		ReadinessProbe: readinessProbe,
+		StartupProbe:   startupProbe,
 		Ports: []v1.ContainerPort{
 			{
 				Name:          "https",
@@ -684,11 +779,9 @@ func (b *KubeAPIServerBuilder) buildPod(ctx context.Context, kubeAPIServer *kops
 	}
 
 	for _, path := range b.SSLHostPaths() {
-		name := strings.Replace(path, "/", "", -1)
+		name := strings.ReplaceAll(path, "/", "")
 		kubemanifest.AddHostPathMapping(pod, container, name, path)
 	}
-
-	kubemanifest.AddHostPathMapping(pod, container, "cloudconfig", InTreeCloudConfigFilePath)
 
 	kubemanifest.AddHostPathMapping(pod, container, "kubernetesca", filepath.Join(b.PathSrvKubernetes(), "ca.crt"))
 

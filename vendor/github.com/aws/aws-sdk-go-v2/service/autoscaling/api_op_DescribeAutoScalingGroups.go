@@ -5,13 +5,10 @@ package autoscaling
 import (
 	"context"
 	"fmt"
-	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/service/autoscaling/types"
 	"github.com/aws/smithy-go/middleware"
 	smithytime "github.com/aws/smithy-go/time"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
 	smithywaiter "github.com/aws/smithy-go/waiter"
-	jmespath "github.com/jmespath/go-jmespath"
 	"strconv"
 	"time"
 )
@@ -25,8 +22,10 @@ import (
 // information for all Auto Scaling groups.
 //
 // This operation also returns information about instances in Auto Scaling groups.
-// To retrieve information about the instances in a warm pool, you must call the DescribeWarmPool
+// To retrieve information about the instances in a warm pool, you must call the [DescribeWarmPool]
 // API.
+//
+// [DescribeWarmPool]: https://docs.aws.amazon.com/autoscaling/ec2/APIReference/API_DescribeWarmPool.html
 func (c *Client) DescribeAutoScalingGroups(ctx context.Context, params *DescribeAutoScalingGroupsInput, optFns ...func(*Options)) (*DescribeAutoScalingGroupsOutput, error) {
 	if params == nil {
 		params = &DescribeAutoScalingGroupsInput{}
@@ -52,6 +51,10 @@ type DescribeAutoScalingGroupsInput struct {
 
 	// One or more filters to limit the results based on specific tags.
 	Filters []types.Filter
+
+	//  Specifies whether to include information about Amazon EC2 instances in the
+	// response. When set to true (default), the response includes instance details.
+	IncludeInstances *bool
 
 	// The maximum number of items to return with this call. The default value is 50
 	// and the maximum value is 100 .
@@ -84,9 +87,6 @@ type DescribeAutoScalingGroupsOutput struct {
 }
 
 func (c *Client) addOperationDescribeAutoScalingGroupsMiddlewares(stack *middleware.Stack, options Options) (err error) {
-	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
-		return err
-	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpDescribeAutoScalingGroups{}, middleware.After)
 	if err != nil {
 		return err
@@ -95,19 +95,7 @@ func (c *Client) addOperationDescribeAutoScalingGroupsMiddlewares(stack *middlew
 	if err != nil {
 		return err
 	}
-	if err := addProtocolFinalizerMiddlewares(stack, options, "DescribeAutoScalingGroups"); err != nil {
-		return fmt.Errorf("add protocol finalizers: %v", err)
-	}
 
-	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
-		return err
-	}
-	if err = addSetLoggerMiddleware(stack, options); err != nil {
-		return err
-	}
-	if err = addClientRequestID(stack); err != nil {
-		return err
-	}
 	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
@@ -117,37 +105,10 @@ func (c *Client) addOperationDescribeAutoScalingGroupsMiddlewares(stack *middlew
 	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetry(stack, options); err != nil {
+	if err = addRecordResponseTiming(stack, options); err != nil {
 		return err
 	}
-	if err = addRawResponseToMetadata(stack); err != nil {
-		return err
-	}
-	if err = addRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack, options); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addTimeOffsetBuild(stack, c); err != nil {
-		return err
-	}
-	if err = addUserAgentRetryMode(stack, options); err != nil {
-		return err
-	}
-	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opDescribeAutoScalingGroups(options.Region), middleware.Before); err != nil {
-		return err
-	}
-	if err = addRecursionDetection(stack); err != nil {
+	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -160,6 +121,9 @@ func (c *Client) addOperationDescribeAutoScalingGroupsMiddlewares(stack *middlew
 		return err
 	}
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
+	if err = addInterceptors(stack, options); err != nil {
 		return err
 	}
 	return nil
@@ -324,47 +288,38 @@ func (w *GroupExistsWaiter) WaitForOutput(ctx context.Context, params *DescribeA
 func groupExistsStateRetryable(ctx context.Context, input *DescribeAutoScalingGroupsInput, output *DescribeAutoScalingGroupsOutput, err error) (bool, error) {
 
 	if err == nil {
-		pathValue, err := jmespath.Search("length(AutoScalingGroups) > `0`", output)
-		if err != nil {
-			return false, fmt.Errorf("error evaluating waiter state: %w", err)
-		}
-
+		v1 := output.AutoScalingGroups
+		v2 := len(v1)
+		v3 := 0
+		v4 := int64(v2) > int64(v3)
 		expectedValue := "true"
 		bv, err := strconv.ParseBool(expectedValue)
 		if err != nil {
 			return false, fmt.Errorf("error parsing boolean from string %w", err)
 		}
-		value, ok := pathValue.(bool)
-		if !ok {
-			return false, fmt.Errorf("waiter comparator expected bool value got %T", pathValue)
-		}
-
-		if value == bv {
+		if v4 == bv {
 			return false, nil
 		}
 	}
 
 	if err == nil {
-		pathValue, err := jmespath.Search("length(AutoScalingGroups) > `0`", output)
-		if err != nil {
-			return false, fmt.Errorf("error evaluating waiter state: %w", err)
-		}
-
+		v1 := output.AutoScalingGroups
+		v2 := len(v1)
+		v3 := 0
+		v4 := int64(v2) > int64(v3)
 		expectedValue := "false"
 		bv, err := strconv.ParseBool(expectedValue)
 		if err != nil {
 			return false, fmt.Errorf("error parsing boolean from string %w", err)
 		}
-		value, ok := pathValue.(bool)
-		if !ok {
-			return false, fmt.Errorf("waiter comparator expected bool value got %T", pathValue)
-		}
-
-		if value == bv {
+		if v4 == bv {
 			return true, nil
 		}
 	}
 
+	if err != nil {
+		return false, err
+	}
 	return true, nil
 }
 
@@ -528,47 +483,110 @@ func (w *GroupInServiceWaiter) WaitForOutput(ctx context.Context, params *Descri
 func groupInServiceStateRetryable(ctx context.Context, input *DescribeAutoScalingGroupsInput, output *DescribeAutoScalingGroupsOutput, err error) (bool, error) {
 
 	if err == nil {
-		pathValue, err := jmespath.Search("contains(AutoScalingGroups[].[length(Instances[?LifecycleState=='InService']) >= MinSize][], `false`)", output)
-		if err != nil {
-			return false, fmt.Errorf("error evaluating waiter state: %w", err)
-		}
+		v1 := output.AutoScalingGroups
+		var v2 [][]bool
+		for _, v := range v1 {
+			v3 := v.Instances
+			var v4 []types.Instance
+			for _, v := range v3 {
+				v5 := v.LifecycleState
+				v6 := "InService"
+				v7 := string(v5) == string(v6)
+				if v7 {
+					v4 = append(v4, v)
+				}
+			}
+			v8 := len(v4)
+			v9 := v.MinSize
+			var v10 bool
 
+			if v9 == nil {
+				v9 = new(int32)
+				*v9 = 0
+			}
+			if v9 != nil {
+				v10 = int64(v8) >= int64(*v9)
+			}
+			v11 := []bool{}
+			v11 = append(v11, v10)
+			v2 = append(v2, v11)
+		}
+		var v12 []bool
+		for _, v := range v2 {
+			v12 = append(v12, v...)
+		}
+		v13 := false
+		var v14 bool
+		for _, v := range v12 {
+			if v == v13 {
+				v14 = true
+				break
+			}
+		}
 		expectedValue := "false"
 		bv, err := strconv.ParseBool(expectedValue)
 		if err != nil {
 			return false, fmt.Errorf("error parsing boolean from string %w", err)
 		}
-		value, ok := pathValue.(bool)
-		if !ok {
-			return false, fmt.Errorf("waiter comparator expected bool value got %T", pathValue)
-		}
-
-		if value == bv {
+		if v14 == bv {
 			return false, nil
 		}
 	}
 
 	if err == nil {
-		pathValue, err := jmespath.Search("contains(AutoScalingGroups[].[length(Instances[?LifecycleState=='InService']) >= MinSize][], `false`)", output)
-		if err != nil {
-			return false, fmt.Errorf("error evaluating waiter state: %w", err)
-		}
+		v1 := output.AutoScalingGroups
+		var v2 [][]bool
+		for _, v := range v1 {
+			v3 := v.Instances
+			var v4 []types.Instance
+			for _, v := range v3 {
+				v5 := v.LifecycleState
+				v6 := "InService"
+				v7 := string(v5) == string(v6)
+				if v7 {
+					v4 = append(v4, v)
+				}
+			}
+			v8 := len(v4)
+			v9 := v.MinSize
+			var v10 bool
 
+			if v9 == nil {
+				v9 = new(int32)
+				*v9 = 0
+			}
+			if v9 != nil {
+				v10 = int64(v8) >= int64(*v9)
+			}
+			v11 := []bool{}
+			v11 = append(v11, v10)
+			v2 = append(v2, v11)
+		}
+		var v12 []bool
+		for _, v := range v2 {
+			v12 = append(v12, v...)
+		}
+		v13 := false
+		var v14 bool
+		for _, v := range v12 {
+			if v == v13 {
+				v14 = true
+				break
+			}
+		}
 		expectedValue := "true"
 		bv, err := strconv.ParseBool(expectedValue)
 		if err != nil {
 			return false, fmt.Errorf("error parsing boolean from string %w", err)
 		}
-		value, ok := pathValue.(bool)
-		if !ok {
-			return false, fmt.Errorf("waiter comparator expected bool value got %T", pathValue)
-		}
-
-		if value == bv {
+		if v14 == bv {
 			return true, nil
 		}
 	}
 
+	if err != nil {
+		return false, err
+	}
 	return true, nil
 }
 
@@ -732,47 +750,38 @@ func (w *GroupNotExistsWaiter) WaitForOutput(ctx context.Context, params *Descri
 func groupNotExistsStateRetryable(ctx context.Context, input *DescribeAutoScalingGroupsInput, output *DescribeAutoScalingGroupsOutput, err error) (bool, error) {
 
 	if err == nil {
-		pathValue, err := jmespath.Search("length(AutoScalingGroups) > `0`", output)
-		if err != nil {
-			return false, fmt.Errorf("error evaluating waiter state: %w", err)
-		}
-
+		v1 := output.AutoScalingGroups
+		v2 := len(v1)
+		v3 := 0
+		v4 := int64(v2) > int64(v3)
 		expectedValue := "false"
 		bv, err := strconv.ParseBool(expectedValue)
 		if err != nil {
 			return false, fmt.Errorf("error parsing boolean from string %w", err)
 		}
-		value, ok := pathValue.(bool)
-		if !ok {
-			return false, fmt.Errorf("waiter comparator expected bool value got %T", pathValue)
-		}
-
-		if value == bv {
+		if v4 == bv {
 			return false, nil
 		}
 	}
 
 	if err == nil {
-		pathValue, err := jmespath.Search("length(AutoScalingGroups) > `0`", output)
-		if err != nil {
-			return false, fmt.Errorf("error evaluating waiter state: %w", err)
-		}
-
+		v1 := output.AutoScalingGroups
+		v2 := len(v1)
+		v3 := 0
+		v4 := int64(v2) > int64(v3)
 		expectedValue := "true"
 		bv, err := strconv.ParseBool(expectedValue)
 		if err != nil {
 			return false, fmt.Errorf("error parsing boolean from string %w", err)
 		}
-		value, ok := pathValue.(bool)
-		if !ok {
-			return false, fmt.Errorf("waiter comparator expected bool value got %T", pathValue)
-		}
-
-		if value == bv {
+		if v4 == bv {
 			return true, nil
 		}
 	}
 
+	if err != nil {
+		return false, err
+	}
 	return true, nil
 }
 
@@ -871,11 +880,3 @@ type DescribeAutoScalingGroupsAPIClient interface {
 }
 
 var _ DescribeAutoScalingGroupsAPIClient = (*Client)(nil)
-
-func newServiceMetadataMiddleware_opDescribeAutoScalingGroups(region string) *awsmiddleware.RegisterServiceMetadata {
-	return &awsmiddleware.RegisterServiceMetadata{
-		Region:        region,
-		ServiceID:     ServiceID,
-		OperationName: "DescribeAutoScalingGroups",
-	}
-}

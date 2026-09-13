@@ -6,13 +6,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/service/ssm/types"
 	"github.com/aws/smithy-go/middleware"
 	smithytime "github.com/aws/smithy-go/time"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
 	smithywaiter "github.com/aws/smithy-go/waiter"
-	jmespath "github.com/jmespath/go-jmespath"
 	"time"
 )
 
@@ -204,9 +201,6 @@ type GetCommandInvocationOutput struct {
 }
 
 func (c *Client) addOperationGetCommandInvocationMiddlewares(stack *middleware.Stack, options Options) (err error) {
-	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
-		return err
-	}
 	err = stack.Serialize.Add(&awsAwsjson11_serializeOpGetCommandInvocation{}, middleware.After)
 	if err != nil {
 		return err
@@ -215,19 +209,7 @@ func (c *Client) addOperationGetCommandInvocationMiddlewares(stack *middleware.S
 	if err != nil {
 		return err
 	}
-	if err := addProtocolFinalizerMiddlewares(stack, options, "GetCommandInvocation"); err != nil {
-		return fmt.Errorf("add protocol finalizers: %v", err)
-	}
 
-	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
-		return err
-	}
-	if err = addSetLoggerMiddleware(stack, options); err != nil {
-		return err
-	}
-	if err = addClientRequestID(stack); err != nil {
-		return err
-	}
 	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
@@ -237,40 +219,13 @@ func (c *Client) addOperationGetCommandInvocationMiddlewares(stack *middleware.S
 	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetry(stack, options); err != nil {
+	if err = addRecordResponseTiming(stack, options); err != nil {
 		return err
 	}
-	if err = addRawResponseToMetadata(stack); err != nil {
-		return err
-	}
-	if err = addRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack, options); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addTimeOffsetBuild(stack, c); err != nil {
-		return err
-	}
-	if err = addUserAgentRetryMode(stack, options); err != nil {
+	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
 	if err = addOpGetCommandInvocationValidationMiddleware(stack); err != nil {
-		return err
-	}
-	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opGetCommandInvocation(options.Region), middleware.Before); err != nil {
-		return err
-	}
-	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -283,6 +238,9 @@ func (c *Client) addOperationGetCommandInvocationMiddlewares(stack *middleware.S
 		return err
 	}
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
+	if err = addInterceptors(stack, options); err != nil {
 		return err
 	}
 	return nil
@@ -448,137 +406,81 @@ func (w *CommandExecutedWaiter) WaitForOutput(ctx context.Context, params *GetCo
 func commandExecutedStateRetryable(ctx context.Context, input *GetCommandInvocationInput, output *GetCommandInvocationOutput, err error) (bool, error) {
 
 	if err == nil {
-		pathValue, err := jmespath.Search("Status", output)
-		if err != nil {
-			return false, fmt.Errorf("error evaluating waiter state: %w", err)
-		}
-
+		v1 := output.Status
 		expectedValue := "Pending"
-		value, ok := pathValue.(types.CommandInvocationStatus)
-		if !ok {
-			return false, fmt.Errorf("waiter comparator expected types.CommandInvocationStatus value, got %T", pathValue)
-		}
-
-		if string(value) == expectedValue {
+		var pathValue string
+		pathValue = string(v1)
+		if pathValue == expectedValue {
 			return true, nil
 		}
 	}
 
 	if err == nil {
-		pathValue, err := jmespath.Search("Status", output)
-		if err != nil {
-			return false, fmt.Errorf("error evaluating waiter state: %w", err)
-		}
-
+		v1 := output.Status
 		expectedValue := "InProgress"
-		value, ok := pathValue.(types.CommandInvocationStatus)
-		if !ok {
-			return false, fmt.Errorf("waiter comparator expected types.CommandInvocationStatus value, got %T", pathValue)
-		}
-
-		if string(value) == expectedValue {
+		var pathValue string
+		pathValue = string(v1)
+		if pathValue == expectedValue {
 			return true, nil
 		}
 	}
 
 	if err == nil {
-		pathValue, err := jmespath.Search("Status", output)
-		if err != nil {
-			return false, fmt.Errorf("error evaluating waiter state: %w", err)
-		}
-
+		v1 := output.Status
 		expectedValue := "Delayed"
-		value, ok := pathValue.(types.CommandInvocationStatus)
-		if !ok {
-			return false, fmt.Errorf("waiter comparator expected types.CommandInvocationStatus value, got %T", pathValue)
-		}
-
-		if string(value) == expectedValue {
+		var pathValue string
+		pathValue = string(v1)
+		if pathValue == expectedValue {
 			return true, nil
 		}
 	}
 
 	if err == nil {
-		pathValue, err := jmespath.Search("Status", output)
-		if err != nil {
-			return false, fmt.Errorf("error evaluating waiter state: %w", err)
-		}
-
+		v1 := output.Status
 		expectedValue := "Success"
-		value, ok := pathValue.(types.CommandInvocationStatus)
-		if !ok {
-			return false, fmt.Errorf("waiter comparator expected types.CommandInvocationStatus value, got %T", pathValue)
-		}
-
-		if string(value) == expectedValue {
+		var pathValue string
+		pathValue = string(v1)
+		if pathValue == expectedValue {
 			return false, nil
 		}
 	}
 
 	if err == nil {
-		pathValue, err := jmespath.Search("Status", output)
-		if err != nil {
-			return false, fmt.Errorf("error evaluating waiter state: %w", err)
-		}
-
+		v1 := output.Status
 		expectedValue := "Cancelled"
-		value, ok := pathValue.(types.CommandInvocationStatus)
-		if !ok {
-			return false, fmt.Errorf("waiter comparator expected types.CommandInvocationStatus value, got %T", pathValue)
-		}
-
-		if string(value) == expectedValue {
+		var pathValue string
+		pathValue = string(v1)
+		if pathValue == expectedValue {
 			return false, fmt.Errorf("waiter state transitioned to Failure")
 		}
 	}
 
 	if err == nil {
-		pathValue, err := jmespath.Search("Status", output)
-		if err != nil {
-			return false, fmt.Errorf("error evaluating waiter state: %w", err)
-		}
-
+		v1 := output.Status
 		expectedValue := "TimedOut"
-		value, ok := pathValue.(types.CommandInvocationStatus)
-		if !ok {
-			return false, fmt.Errorf("waiter comparator expected types.CommandInvocationStatus value, got %T", pathValue)
-		}
-
-		if string(value) == expectedValue {
+		var pathValue string
+		pathValue = string(v1)
+		if pathValue == expectedValue {
 			return false, fmt.Errorf("waiter state transitioned to Failure")
 		}
 	}
 
 	if err == nil {
-		pathValue, err := jmespath.Search("Status", output)
-		if err != nil {
-			return false, fmt.Errorf("error evaluating waiter state: %w", err)
-		}
-
+		v1 := output.Status
 		expectedValue := "Failed"
-		value, ok := pathValue.(types.CommandInvocationStatus)
-		if !ok {
-			return false, fmt.Errorf("waiter comparator expected types.CommandInvocationStatus value, got %T", pathValue)
-		}
-
-		if string(value) == expectedValue {
+		var pathValue string
+		pathValue = string(v1)
+		if pathValue == expectedValue {
 			return false, fmt.Errorf("waiter state transitioned to Failure")
 		}
 	}
 
 	if err == nil {
-		pathValue, err := jmespath.Search("Status", output)
-		if err != nil {
-			return false, fmt.Errorf("error evaluating waiter state: %w", err)
-		}
-
+		v1 := output.Status
 		expectedValue := "Cancelling"
-		value, ok := pathValue.(types.CommandInvocationStatus)
-		if !ok {
-			return false, fmt.Errorf("waiter comparator expected types.CommandInvocationStatus value, got %T", pathValue)
-		}
-
-		if string(value) == expectedValue {
+		var pathValue string
+		pathValue = string(v1)
+		if pathValue == expectedValue {
 			return false, fmt.Errorf("waiter state transitioned to Failure")
 		}
 	}
@@ -590,6 +492,9 @@ func commandExecutedStateRetryable(ctx context.Context, input *GetCommandInvocat
 		}
 	}
 
+	if err != nil {
+		return false, err
+	}
 	return true, nil
 }
 
@@ -600,11 +505,3 @@ type GetCommandInvocationAPIClient interface {
 }
 
 var _ GetCommandInvocationAPIClient = (*Client)(nil)
-
-func newServiceMetadataMiddleware_opGetCommandInvocation(region string) *awsmiddleware.RegisterServiceMetadata {
-	return &awsmiddleware.RegisterServiceMetadata{
-		Region:        region,
-		ServiceID:     ServiceID,
-		OperationName: "GetCommandInvocation",
-	}
-}

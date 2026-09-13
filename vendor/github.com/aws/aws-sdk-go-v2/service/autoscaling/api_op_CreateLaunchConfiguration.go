@@ -4,17 +4,14 @@ package autoscaling
 
 import (
 	"context"
-	"fmt"
-	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/service/autoscaling/types"
 	"github.com/aws/smithy-go/middleware"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
 // Creates a launch configuration.
 //
 // If you exceed your maximum limit of launch configurations, the call fails. To
-// query this limit, call the DescribeAccountLimitsAPI. For information about updating this limit, see [Quotas for Amazon EC2 Auto Scaling]
+// query this limit, call the [DescribeAccountLimits]API. For information about updating this limit, see [Quotas for Amazon EC2 Auto Scaling]
 // in the Amazon EC2 Auto Scaling User Guide.
 //
 // For more information, see [Launch configurations] in the Amazon EC2 Auto Scaling User Guide.
@@ -26,6 +23,7 @@ import (
 // information about using launch templates, see [Launch templates]in the Amazon EC2 Auto Scaling
 // User Guide.
 //
+// [DescribeAccountLimits]: https://docs.aws.amazon.com/autoscaling/ec2/APIReference/API_DescribeAccountLimits.html
 // [Quotas for Amazon EC2 Auto Scaling]: https://docs.aws.amazon.com/autoscaling/ec2/userguide/ec2-auto-scaling-quotas.html
 // [Launch configurations]: https://docs.aws.amazon.com/autoscaling/ec2/userguide/launch-configurations.html
 // [Launch templates]: https://docs.aws.amazon.com/autoscaling/ec2/userguide/launch-templates.html
@@ -72,7 +70,7 @@ type CreateLaunchConfigurationInput struct {
 	// The block device mapping entries that define the block devices to attach to the
 	// instances at launch. By default, the block devices specified in the block device
 	// mapping for the AMI are used. For more information, see [Block device mappings]in the Amazon EC2 User
-	// Guide for Linux Instances.
+	// Guide.
 	//
 	// [Block device mappings]: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/block-device-mapping-concepts.html
 	BlockDeviceMappings []types.BlockDeviceMapping
@@ -89,7 +87,7 @@ type CreateLaunchConfigurationInput struct {
 	// optimization is not available with all instance types. Additional fees are
 	// incurred when you enable EBS optimization for an instance type that is not
 	// EBS-optimized by default. For more information, see [Amazon EBS-optimized instances]in the Amazon EC2 User
-	// Guide for Linux Instances.
+	// Guide.
 	//
 	// The default value is false .
 	//
@@ -104,7 +102,7 @@ type CreateLaunchConfigurationInput struct {
 	IamInstanceProfile *string
 
 	// The ID of the Amazon Machine Image (AMI) that was assigned during registration.
-	// For more information, see [Find a Linux AMI]in the Amazon EC2 User Guide for Linux Instances.
+	// For more information, see [Find a Linux AMI]in the Amazon EC2 User Guide.
 	//
 	// If you specify InstanceId , an ImageId is not required.
 	//
@@ -137,7 +135,7 @@ type CreateLaunchConfigurationInput struct {
 	InstanceMonitoring *types.InstanceMonitoring
 
 	// Specifies the instance type of the EC2 instance. For information about
-	// available instance types, see [Available instance types]in the Amazon EC2 User Guide for Linux Instances.
+	// available instance types, see [Available instance types]in the Amazon EC2 User Guide.
 	//
 	// If you specify InstanceId , an InstanceType is not required.
 	//
@@ -147,13 +145,13 @@ type CreateLaunchConfigurationInput struct {
 	// The ID of the kernel associated with the AMI.
 	//
 	// We recommend that you use PV-GRUB instead of kernels and RAM disks. For more
-	// information, see [User provided kernels]in the Amazon EC2 User Guide for Linux Instances.
+	// information, see [User provided kernels]in the Amazon EC2 User Guide.
 	//
 	// [User provided kernels]: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/UserProvidedKernels.html
 	KernelId *string
 
 	// The name of the key pair. For more information, see [Amazon EC2 key pairs and Amazon EC2 instances] in the Amazon EC2 User
-	// Guide for Linux Instances.
+	// Guide.
 	//
 	// [Amazon EC2 key pairs and Amazon EC2 instances]: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html
 	KeyName *string
@@ -179,7 +177,7 @@ type CreateLaunchConfigurationInput struct {
 	// The ID of the RAM disk to select.
 	//
 	// We recommend that you use PV-GRUB instead of kernels and RAM disks. For more
-	// information, see [User provided kernels]in the Amazon EC2 User Guide for Linux Instances.
+	// information, see [User provided kernels]in the Amazon EC2 User Guide.
 	//
 	// [User provided kernels]: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/UserProvidedKernels.html
 	RamdiskId *string
@@ -224,9 +222,6 @@ type CreateLaunchConfigurationOutput struct {
 }
 
 func (c *Client) addOperationCreateLaunchConfigurationMiddlewares(stack *middleware.Stack, options Options) (err error) {
-	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
-		return err
-	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpCreateLaunchConfiguration{}, middleware.After)
 	if err != nil {
 		return err
@@ -235,19 +230,7 @@ func (c *Client) addOperationCreateLaunchConfigurationMiddlewares(stack *middlew
 	if err != nil {
 		return err
 	}
-	if err := addProtocolFinalizerMiddlewares(stack, options, "CreateLaunchConfiguration"); err != nil {
-		return fmt.Errorf("add protocol finalizers: %v", err)
-	}
 
-	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
-		return err
-	}
-	if err = addSetLoggerMiddleware(stack, options); err != nil {
-		return err
-	}
-	if err = addClientRequestID(stack); err != nil {
-		return err
-	}
 	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
@@ -257,40 +240,13 @@ func (c *Client) addOperationCreateLaunchConfigurationMiddlewares(stack *middlew
 	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetry(stack, options); err != nil {
+	if err = addRecordResponseTiming(stack, options); err != nil {
 		return err
 	}
-	if err = addRawResponseToMetadata(stack); err != nil {
-		return err
-	}
-	if err = addRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack, options); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addTimeOffsetBuild(stack, c); err != nil {
-		return err
-	}
-	if err = addUserAgentRetryMode(stack, options); err != nil {
+	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
 	if err = addOpCreateLaunchConfigurationValidationMiddleware(stack); err != nil {
-		return err
-	}
-	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opCreateLaunchConfiguration(options.Region), middleware.Before); err != nil {
-		return err
-	}
-	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -305,13 +261,8 @@ func (c *Client) addOperationCreateLaunchConfigurationMiddlewares(stack *middlew
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
-	return nil
-}
-
-func newServiceMetadataMiddleware_opCreateLaunchConfiguration(region string) *awsmiddleware.RegisterServiceMetadata {
-	return &awsmiddleware.RegisterServiceMetadata{
-		Region:        region,
-		ServiceID:     ServiceID,
-		OperationName: "CreateLaunchConfiguration",
+	if err = addInterceptors(stack, options); err != nil {
+		return err
 	}
+	return nil
 }

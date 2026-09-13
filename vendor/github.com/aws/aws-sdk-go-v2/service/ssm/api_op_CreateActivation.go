@@ -4,28 +4,24 @@ package ssm
 
 import (
 	"context"
-	"fmt"
-	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/service/ssm/types"
 	"github.com/aws/smithy-go/middleware"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
 	"time"
 )
 
 // Generates an activation code and activation ID you can use to register your
 // on-premises servers, edge devices, or virtual machine (VM) with Amazon Web
 // Services Systems Manager. Registering these machines with Systems Manager makes
-// it possible to manage them using Systems Manager capabilities. You use the
-// activation code and ID when installing SSM Agent on machines in your hybrid
-// environment. For more information about requirements for managing on-premises
-// machines using Systems Manager, see [Setting up Amazon Web Services Systems Manager for hybrid and multicloud environments]in the Amazon Web Services Systems Manager
-// User Guide.
+// it possible to manage them using Systems Manager tools. You use the activation
+// code and ID when installing SSM Agent on machines in your hybrid environment.
+// For more information about requirements for managing on-premises machines using
+// Systems Manager, see [Using Amazon Web Services Systems Manager in hybrid and multicloud environments]in the Amazon Web Services Systems Manager User Guide.
 //
 // Amazon Elastic Compute Cloud (Amazon EC2) instances, edge devices, and
 // on-premises servers and VMs that are configured for Systems Manager are all
 // called managed nodes.
 //
-// [Setting up Amazon Web Services Systems Manager for hybrid and multicloud environments]: https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-managedinstances.html
+// [Using Amazon Web Services Systems Manager in hybrid and multicloud environments]: https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-hybrid-multicloud.html
 func (c *Client) CreateActivation(ctx context.Context, params *CreateActivationInput, optFns ...func(*Options)) (*CreateActivationOutput, error) {
 	if params == nil {
 		params = &CreateActivationInput{}
@@ -46,13 +42,13 @@ type CreateActivationInput struct {
 	// The name of the Identity and Access Management (IAM) role that you want to
 	// assign to the managed node. This IAM role must provide AssumeRole permissions
 	// for the Amazon Web Services Systems Manager service principal ssm.amazonaws.com
-	// . For more information, see [Create an IAM service role for a hybrid and multicloud environment]in the Amazon Web Services Systems Manager User
+	// . For more information, see [Create the IAM service role required for Systems Manager in a hybrid and multicloud environments]in the Amazon Web Services Systems Manager User
 	// Guide.
 	//
 	// You can't specify an IAM service-linked role for this parameter. You must
 	// create a unique role.
 	//
-	// [Create an IAM service role for a hybrid and multicloud environment]: https://docs.aws.amazon.com/systems-manager/latest/userguide/sysman-service-role.html
+	// [Create the IAM service role required for Systems Manager in a hybrid and multicloud environments]: https://docs.aws.amazon.com/systems-manager/latest/userguide/hybrid-multicloud-service-role.html
 	//
 	// This member is required.
 	IamRole *string
@@ -71,7 +67,7 @@ type CreateActivationInput struct {
 	Description *string
 
 	// The date by which this activation request should expire, in timestamp format,
-	// such as "2021-07-07T00:00:00". You can specify a date up to 30 days in advance.
+	// such as "2024-07-07T00:00:00". You can specify a date up to 30 days in advance.
 	// If you don't provide an expiration date, the activation code expires in 24
 	// hours.
 	ExpirationDate *time.Time
@@ -127,9 +123,6 @@ type CreateActivationOutput struct {
 }
 
 func (c *Client) addOperationCreateActivationMiddlewares(stack *middleware.Stack, options Options) (err error) {
-	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
-		return err
-	}
 	err = stack.Serialize.Add(&awsAwsjson11_serializeOpCreateActivation{}, middleware.After)
 	if err != nil {
 		return err
@@ -138,19 +131,7 @@ func (c *Client) addOperationCreateActivationMiddlewares(stack *middleware.Stack
 	if err != nil {
 		return err
 	}
-	if err := addProtocolFinalizerMiddlewares(stack, options, "CreateActivation"); err != nil {
-		return fmt.Errorf("add protocol finalizers: %v", err)
-	}
 
-	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
-		return err
-	}
-	if err = addSetLoggerMiddleware(stack, options); err != nil {
-		return err
-	}
-	if err = addClientRequestID(stack); err != nil {
-		return err
-	}
 	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
@@ -160,40 +141,13 @@ func (c *Client) addOperationCreateActivationMiddlewares(stack *middleware.Stack
 	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetry(stack, options); err != nil {
+	if err = addRecordResponseTiming(stack, options); err != nil {
 		return err
 	}
-	if err = addRawResponseToMetadata(stack); err != nil {
-		return err
-	}
-	if err = addRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack, options); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addTimeOffsetBuild(stack, c); err != nil {
-		return err
-	}
-	if err = addUserAgentRetryMode(stack, options); err != nil {
+	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
 	if err = addOpCreateActivationValidationMiddleware(stack); err != nil {
-		return err
-	}
-	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opCreateActivation(options.Region), middleware.Before); err != nil {
-		return err
-	}
-	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -208,13 +162,8 @@ func (c *Client) addOperationCreateActivationMiddlewares(stack *middleware.Stack
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
-	return nil
-}
-
-func newServiceMetadataMiddleware_opCreateActivation(region string) *awsmiddleware.RegisterServiceMetadata {
-	return &awsmiddleware.RegisterServiceMetadata{
-		Region:        region,
-		ServiceID:     ServiceID,
-		OperationName: "CreateActivation",
+	if err = addInterceptors(stack, options); err != nil {
+		return err
 	}
+	return nil
 }

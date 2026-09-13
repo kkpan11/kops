@@ -4,10 +4,7 @@ package sqs
 
 import (
 	"context"
-	"fmt"
-	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/smithy-go/middleware"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
 // Sets the value of one or more queue attributes, like a policy. When you change
@@ -58,7 +55,7 @@ type SetQueueAttributesInput struct {
 	//
 	//   - MaximumMessageSize – The limit of how many bytes a message can contain
 	//   before Amazon SQS rejects it. Valid values: An integer from 1,024 bytes (1 KiB)
-	//   up to 262,144 bytes (256 KiB). Default: 262,144 (256 KiB).
+	//   up to 1,048,576 bytes (1 MiB). Default: 1,048,576 bytes (1 MiB).
 	//
 	//   - MessageRetentionPeriod – The length of time, in seconds, for which Amazon
 	//   SQS retains a message. Valid values: An integer representing seconds, from 60 (1
@@ -229,9 +226,6 @@ type SetQueueAttributesOutput struct {
 }
 
 func (c *Client) addOperationSetQueueAttributesMiddlewares(stack *middleware.Stack, options Options) (err error) {
-	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
-		return err
-	}
 	err = stack.Serialize.Add(&awsAwsjson10_serializeOpSetQueueAttributes{}, middleware.After)
 	if err != nil {
 		return err
@@ -240,19 +234,7 @@ func (c *Client) addOperationSetQueueAttributesMiddlewares(stack *middleware.Sta
 	if err != nil {
 		return err
 	}
-	if err := addProtocolFinalizerMiddlewares(stack, options, "SetQueueAttributes"); err != nil {
-		return fmt.Errorf("add protocol finalizers: %v", err)
-	}
 
-	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
-		return err
-	}
-	if err = addSetLoggerMiddleware(stack, options); err != nil {
-		return err
-	}
-	if err = addClientRequestID(stack); err != nil {
-		return err
-	}
 	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
@@ -262,40 +244,13 @@ func (c *Client) addOperationSetQueueAttributesMiddlewares(stack *middleware.Sta
 	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetry(stack, options); err != nil {
+	if err = addRecordResponseTiming(stack, options); err != nil {
 		return err
 	}
-	if err = addRawResponseToMetadata(stack); err != nil {
-		return err
-	}
-	if err = addRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack, options); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addTimeOffsetBuild(stack, c); err != nil {
-		return err
-	}
-	if err = addUserAgentRetryMode(stack, options); err != nil {
+	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
 	if err = addOpSetQueueAttributesValidationMiddleware(stack); err != nil {
-		return err
-	}
-	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opSetQueueAttributes(options.Region), middleware.Before); err != nil {
-		return err
-	}
-	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -310,13 +265,8 @@ func (c *Client) addOperationSetQueueAttributesMiddlewares(stack *middleware.Sta
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
-	return nil
-}
-
-func newServiceMetadataMiddleware_opSetQueueAttributes(region string) *awsmiddleware.RegisterServiceMetadata {
-	return &awsmiddleware.RegisterServiceMetadata{
-		Region:        region,
-		ServiceID:     ServiceID,
-		OperationName: "SetQueueAttributes",
+	if err = addInterceptors(stack, options); err != nil {
+		return err
 	}
+	return nil
 }

@@ -4,11 +4,8 @@ package eventbridge
 
 import (
 	"context"
-	"fmt"
-	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/service/eventbridge/types"
 	"github.com/aws/smithy-go/middleware"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
 // Lists your Amazon EventBridge rules. You can either list all the rules or you
@@ -47,7 +44,14 @@ type ListRulesInput struct {
 	// The prefix matching the rule name.
 	NamePrefix *string
 
-	// The token returned by a previous call to retrieve the next set of results.
+	// The token returned by a previous call, which you can use to retrieve the next
+	// set of results.
+	//
+	// The value of nextToken is a unique pagination token for each page. To retrieve
+	// the next page of results, make the call again using the returned token. Keep all
+	// other arguments unchanged.
+	//
+	// Using an expired pagination token results in an HTTP 400 InvalidToken error.
 	NextToken *string
 
 	noSmithyDocumentSerde
@@ -55,8 +59,14 @@ type ListRulesInput struct {
 
 type ListRulesOutput struct {
 
-	// Indicates whether there are additional results to retrieve. If there are no
-	// more results, the value is null.
+	// A token indicating there are more results available. If there are no more
+	// results, no token is included in the response.
+	//
+	// The value of nextToken is a unique pagination token for each page. To retrieve
+	// the next page of results, make the call again using the returned token. Keep all
+	// other arguments unchanged.
+	//
+	// Using an expired pagination token results in an HTTP 400 InvalidToken error.
 	NextToken *string
 
 	// The rules that match the specified criteria.
@@ -69,9 +79,6 @@ type ListRulesOutput struct {
 }
 
 func (c *Client) addOperationListRulesMiddlewares(stack *middleware.Stack, options Options) (err error) {
-	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
-		return err
-	}
 	err = stack.Serialize.Add(&awsAwsjson11_serializeOpListRules{}, middleware.After)
 	if err != nil {
 		return err
@@ -80,19 +87,7 @@ func (c *Client) addOperationListRulesMiddlewares(stack *middleware.Stack, optio
 	if err != nil {
 		return err
 	}
-	if err := addProtocolFinalizerMiddlewares(stack, options, "ListRules"); err != nil {
-		return fmt.Errorf("add protocol finalizers: %v", err)
-	}
 
-	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
-		return err
-	}
-	if err = addSetLoggerMiddleware(stack, options); err != nil {
-		return err
-	}
-	if err = addClientRequestID(stack); err != nil {
-		return err
-	}
 	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
@@ -102,37 +97,10 @@ func (c *Client) addOperationListRulesMiddlewares(stack *middleware.Stack, optio
 	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetry(stack, options); err != nil {
+	if err = addRecordResponseTiming(stack, options); err != nil {
 		return err
 	}
-	if err = addRawResponseToMetadata(stack); err != nil {
-		return err
-	}
-	if err = addRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack, options); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addTimeOffsetBuild(stack, c); err != nil {
-		return err
-	}
-	if err = addUserAgentRetryMode(stack, options); err != nil {
-		return err
-	}
-	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opListRules(options.Region), middleware.Before); err != nil {
-		return err
-	}
-	if err = addRecursionDetection(stack); err != nil {
+	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -147,13 +115,8 @@ func (c *Client) addOperationListRulesMiddlewares(stack *middleware.Stack, optio
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
-	return nil
-}
-
-func newServiceMetadataMiddleware_opListRules(region string) *awsmiddleware.RegisterServiceMetadata {
-	return &awsmiddleware.RegisterServiceMetadata{
-		Region:        region,
-		ServiceID:     ServiceID,
-		OperationName: "ListRules",
+	if err = addInterceptors(stack, options); err != nil {
+		return err
 	}
+	return nil
 }

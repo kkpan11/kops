@@ -3,8 +3,8 @@ package lb
 import (
 	"time"
 
+	"github.com/scaleway/scaleway-sdk-go/errors"
 	"github.com/scaleway/scaleway-sdk-go/internal/async"
-	"github.com/scaleway/scaleway-sdk-go/internal/errors"
 	"github.com/scaleway/scaleway-sdk-go/scw"
 )
 
@@ -12,25 +12,6 @@ const (
 	defaultRetryInterval = 2 * time.Second
 	defaultTimeout       = 5 * time.Minute
 )
-
-// WaitForLBRequest is used by WaitForLb method.
-type WaitForLBRequest struct {
-	LBID          string
-	Region        scw.Region
-	Timeout       *time.Duration
-	RetryInterval *time.Duration
-}
-
-// WaitForLb waits for the lb to be in a "terminal state" before returning.
-// This function can be used to wait for a lb to be ready for example.
-func (s *API) WaitForLb(req *WaitForLBRequest, opts ...scw.RequestOption) (*LB, error) {
-	return waitForLb(req.Timeout, req.RetryInterval, func() (*LB, error) {
-		return s.GetLB(&GetLBRequest{
-			Region: req.Region,
-			LBID:   req.LBID,
-		}, opts...)
-	})
-}
 
 // ZonedAPIWaitForLBRequest is used by WaitForLb method.
 type ZonedAPIWaitForLBRequest struct {
@@ -69,9 +50,8 @@ func waitForLb(timeout *time.Duration, retryInterval *time.Duration, getLB func(
 	}
 
 	lb, err := async.WaitSync(&async.WaitSyncConfig{
-		Get: func() (interface{}, bool, error) {
+		Get: func() (any, bool, error) {
 			res, err := getLB()
-
 			if err != nil {
 				return nil, false, err
 			}
@@ -131,7 +111,7 @@ func waitForLbInstances(timeout *time.Duration, retryInterval *time.Duration, ge
 	}
 
 	lb, err := async.WaitSync(&async.WaitSyncConfig{
-		Get: func() (interface{}, bool, error) {
+		Get: func() (any, bool, error) {
 			res, err := getLB()
 			if err != nil {
 				return nil, false, err
@@ -182,14 +162,14 @@ func waitForPNLb(timeout *time.Duration, retryInterval *time.Duration, getPNs fu
 	}
 
 	pn, err := async.WaitSync(&async.WaitSyncConfig{
-		Get: func() (interface{}, bool, error) {
+		Get: func() (any, bool, error) {
 			pns, err := getPNs()
 
 			for _, pn := range pns {
 				if err != nil {
 					return nil, false, err
 				}
-				//wait at the first not terminal state
+				// wait at the first not terminal state
 				_, isTerminal := terminalStatus[pn.Status]
 				if !isTerminal {
 					return pns, isTerminal, nil
@@ -257,9 +237,8 @@ func waitForLBCertificate(timeout *time.Duration, retryInterval *time.Duration, 
 	}
 
 	crt, err := async.WaitSync(&async.WaitSyncConfig{
-		Get: func() (interface{}, bool, error) {
+		Get: func() (any, bool, error) {
 			res, err := getCertificate()
-
 			if err != nil {
 				return nil, false, err
 			}

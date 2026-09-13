@@ -590,12 +590,6 @@ resource "aws_iam_role_policy" "masters-ha-example-com" {
   role   = aws_iam_role.masters-ha-example-com.name
 }
 
-resource "aws_iam_role_policy" "nodes-ha-example-com" {
-  name   = "nodes.ha.example.com"
-  policy = file("${path.module}/data/aws_iam_role_policy_nodes.ha.example.com_policy")
-  role   = aws_iam_role.nodes-ha-example-com.name
-}
-
 resource "aws_internet_gateway" "ha-example-com" {
   tags = {
     "KubernetesCluster"                    = "ha.example.com"
@@ -644,7 +638,7 @@ resource "aws_launch_template" "master-us-test-1a-masters-ha-example-com" {
     http_endpoint               = "enabled"
     http_protocol_ipv6          = "disabled"
     http_put_response_hop_limit = 1
-    http_tokens                 = "optional"
+    http_tokens                 = "required"
   }
   monitoring {
     enabled = false
@@ -673,6 +667,21 @@ resource "aws_launch_template" "master-us-test-1a-masters-ha-example-com" {
   }
   tag_specifications {
     resource_type = "volume"
+    tags = {
+      "KubernetesCluster"                                                                                     = "ha.example.com"
+      "Name"                                                                                                  = "master-us-test-1a.masters.ha.example.com"
+      "aws-node-termination-handler/managed"                                                                  = ""
+      "k8s.io/cluster-autoscaler/node-template/label/kops.k8s.io/kops-controller-pki"                         = ""
+      "k8s.io/cluster-autoscaler/node-template/label/node-role.kubernetes.io/control-plane"                   = ""
+      "k8s.io/cluster-autoscaler/node-template/label/node.kubernetes.io/exclude-from-external-load-balancers" = ""
+      "k8s.io/role/control-plane"                                                                             = "1"
+      "k8s.io/role/master"                                                                                    = "1"
+      "kops.k8s.io/instancegroup"                                                                             = "master-us-test-1a"
+      "kubernetes.io/cluster/ha.example.com"                                                                  = "owned"
+    }
+  }
+  tag_specifications {
+    resource_type = "network-interface"
     tags = {
       "KubernetesCluster"                                                                                     = "ha.example.com"
       "Name"                                                                                                  = "master-us-test-1a.masters.ha.example.com"
@@ -730,7 +739,7 @@ resource "aws_launch_template" "master-us-test-1b-masters-ha-example-com" {
     http_endpoint               = "enabled"
     http_protocol_ipv6          = "disabled"
     http_put_response_hop_limit = 1
-    http_tokens                 = "optional"
+    http_tokens                 = "required"
   }
   monitoring {
     enabled = false
@@ -759,6 +768,21 @@ resource "aws_launch_template" "master-us-test-1b-masters-ha-example-com" {
   }
   tag_specifications {
     resource_type = "volume"
+    tags = {
+      "KubernetesCluster"                                                                                     = "ha.example.com"
+      "Name"                                                                                                  = "master-us-test-1b.masters.ha.example.com"
+      "aws-node-termination-handler/managed"                                                                  = ""
+      "k8s.io/cluster-autoscaler/node-template/label/kops.k8s.io/kops-controller-pki"                         = ""
+      "k8s.io/cluster-autoscaler/node-template/label/node-role.kubernetes.io/control-plane"                   = ""
+      "k8s.io/cluster-autoscaler/node-template/label/node.kubernetes.io/exclude-from-external-load-balancers" = ""
+      "k8s.io/role/control-plane"                                                                             = "1"
+      "k8s.io/role/master"                                                                                    = "1"
+      "kops.k8s.io/instancegroup"                                                                             = "master-us-test-1b"
+      "kubernetes.io/cluster/ha.example.com"                                                                  = "owned"
+    }
+  }
+  tag_specifications {
+    resource_type = "network-interface"
     tags = {
       "KubernetesCluster"                                                                                     = "ha.example.com"
       "Name"                                                                                                  = "master-us-test-1b.masters.ha.example.com"
@@ -816,7 +840,7 @@ resource "aws_launch_template" "master-us-test-1c-masters-ha-example-com" {
     http_endpoint               = "enabled"
     http_protocol_ipv6          = "disabled"
     http_put_response_hop_limit = 1
-    http_tokens                 = "optional"
+    http_tokens                 = "required"
   }
   monitoring {
     enabled = false
@@ -845,6 +869,21 @@ resource "aws_launch_template" "master-us-test-1c-masters-ha-example-com" {
   }
   tag_specifications {
     resource_type = "volume"
+    tags = {
+      "KubernetesCluster"                                                                                     = "ha.example.com"
+      "Name"                                                                                                  = "master-us-test-1c.masters.ha.example.com"
+      "aws-node-termination-handler/managed"                                                                  = ""
+      "k8s.io/cluster-autoscaler/node-template/label/kops.k8s.io/kops-controller-pki"                         = ""
+      "k8s.io/cluster-autoscaler/node-template/label/node-role.kubernetes.io/control-plane"                   = ""
+      "k8s.io/cluster-autoscaler/node-template/label/node.kubernetes.io/exclude-from-external-load-balancers" = ""
+      "k8s.io/role/control-plane"                                                                             = "1"
+      "k8s.io/role/master"                                                                                    = "1"
+      "kops.k8s.io/instancegroup"                                                                             = "master-us-test-1c"
+      "kubernetes.io/cluster/ha.example.com"                                                                  = "owned"
+    }
+  }
+  tag_specifications {
+    resource_type = "network-interface"
     tags = {
       "KubernetesCluster"                                                                                     = "ha.example.com"
       "Name"                                                                                                  = "master-us-test-1c.masters.ha.example.com"
@@ -898,7 +937,7 @@ resource "aws_launch_template" "nodes-ha-example-com" {
     http_endpoint               = "enabled"
     http_protocol_ipv6          = "disabled"
     http_put_response_hop_limit = 1
-    http_tokens                 = "optional"
+    http_tokens                 = "required"
   }
   monitoring {
     enabled = false
@@ -924,6 +963,18 @@ resource "aws_launch_template" "nodes-ha-example-com" {
   }
   tag_specifications {
     resource_type = "volume"
+    tags = {
+      "KubernetesCluster"                                                          = "ha.example.com"
+      "Name"                                                                       = "nodes.ha.example.com"
+      "aws-node-termination-handler/managed"                                       = ""
+      "k8s.io/cluster-autoscaler/node-template/label/node-role.kubernetes.io/node" = ""
+      "k8s.io/role/node"                                                           = "1"
+      "kops.k8s.io/instancegroup"                                                  = "nodes"
+      "kubernetes.io/cluster/ha.example.com"                                       = "owned"
+    }
+  }
+  tag_specifications {
+    resource_type = "network-interface"
     tags = {
       "KubernetesCluster"                                                          = "ha.example.com"
       "Name"                                                                       = "nodes.ha.example.com"
@@ -1091,6 +1142,14 @@ resource "aws_s3_object" "kops-version-txt" {
   bucket                 = "testingBucket"
   content                = file("${path.module}/data/aws_s3_object_kops-version.txt_content")
   key                    = "tests/ha.example.com/kops-version.txt"
+  provider               = aws.files
+  server_side_encryption = "AES256"
+}
+
+resource "aws_s3_object" "manifests-channels-kops-channels" {
+  bucket                 = "testingBucket"
+  content                = file("${path.module}/data/aws_s3_object_manifests-channels-kops-channels_content")
+  key                    = "tests/ha.example.com/manifests/channels/kops-channels.yaml"
   provider               = aws.files
   server_side_encryption = "AES256"
 }

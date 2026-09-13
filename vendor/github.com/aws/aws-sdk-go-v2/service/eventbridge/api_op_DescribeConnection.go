@@ -4,11 +4,8 @@ package eventbridge
 
 import (
 	"context"
-	"fmt"
-	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/service/eventbridge/types"
 	"github.com/aws/smithy-go/middleware"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
 	"time"
 )
 
@@ -58,6 +55,22 @@ type DescribeConnectionOutput struct {
 	// The description for the connection retrieved.
 	Description *string
 
+	// For connections to private APIs The parameters EventBridge uses to invoke the
+	// resource endpoint.
+	//
+	// For more information, see [Connecting to private APIs] in the Amazon EventBridge User Guide .
+	//
+	// [Connecting to private APIs]: https://docs.aws.amazon.com/eventbridge/latest/userguide/connection-private.html
+	InvocationConnectivityParameters *types.DescribeConnectionConnectivityParameters
+
+	// The identifier of the KMS customer managed key for EventBridge to use to
+	// encrypt the connection, if one has been specified.
+	//
+	// For more information, see [Encrypting connections] in the Amazon EventBridge User Guide.
+	//
+	// [Encrypting connections]: https://docs.aws.amazon.com/eventbridge/latest/userguide/encryption-connections.html
+	KmsKeyIdentifier *string
+
 	// A time stamp for the time that the connection was last authorized.
 	LastAuthorizedTime *time.Time
 
@@ -81,9 +94,6 @@ type DescribeConnectionOutput struct {
 }
 
 func (c *Client) addOperationDescribeConnectionMiddlewares(stack *middleware.Stack, options Options) (err error) {
-	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
-		return err
-	}
 	err = stack.Serialize.Add(&awsAwsjson11_serializeOpDescribeConnection{}, middleware.After)
 	if err != nil {
 		return err
@@ -92,19 +102,7 @@ func (c *Client) addOperationDescribeConnectionMiddlewares(stack *middleware.Sta
 	if err != nil {
 		return err
 	}
-	if err := addProtocolFinalizerMiddlewares(stack, options, "DescribeConnection"); err != nil {
-		return fmt.Errorf("add protocol finalizers: %v", err)
-	}
 
-	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
-		return err
-	}
-	if err = addSetLoggerMiddleware(stack, options); err != nil {
-		return err
-	}
-	if err = addClientRequestID(stack); err != nil {
-		return err
-	}
 	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
@@ -114,40 +112,13 @@ func (c *Client) addOperationDescribeConnectionMiddlewares(stack *middleware.Sta
 	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetry(stack, options); err != nil {
+	if err = addRecordResponseTiming(stack, options); err != nil {
 		return err
 	}
-	if err = addRawResponseToMetadata(stack); err != nil {
-		return err
-	}
-	if err = addRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack, options); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addTimeOffsetBuild(stack, c); err != nil {
-		return err
-	}
-	if err = addUserAgentRetryMode(stack, options); err != nil {
+	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
 	if err = addOpDescribeConnectionValidationMiddleware(stack); err != nil {
-		return err
-	}
-	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opDescribeConnection(options.Region), middleware.Before); err != nil {
-		return err
-	}
-	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -162,13 +133,8 @@ func (c *Client) addOperationDescribeConnectionMiddlewares(stack *middleware.Sta
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
-	return nil
-}
-
-func newServiceMetadataMiddleware_opDescribeConnection(region string) *awsmiddleware.RegisterServiceMetadata {
-	return &awsmiddleware.RegisterServiceMetadata{
-		Region:        region,
-		ServiceID:     ServiceID,
-		OperationName: "DescribeConnection",
+	if err = addInterceptors(stack, options); err != nil {
+		return err
 	}
+	return nil
 }

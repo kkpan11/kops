@@ -370,12 +370,6 @@ resource "aws_iam_role_policy" "masters-externallb-example-com" {
   role   = aws_iam_role.masters-externallb-example-com.name
 }
 
-resource "aws_iam_role_policy" "nodes-externallb-example-com" {
-  name   = "nodes.externallb.example.com"
-  policy = file("${path.module}/data/aws_iam_role_policy_nodes.externallb.example.com_policy")
-  role   = aws_iam_role.nodes-externallb-example-com.name
-}
-
 resource "aws_internet_gateway" "externallb-example-com" {
   tags = {
     "KubernetesCluster"                            = "externallb.example.com"
@@ -424,7 +418,7 @@ resource "aws_launch_template" "master-us-test-1a-masters-externallb-example-com
     http_endpoint               = "enabled"
     http_protocol_ipv6          = "disabled"
     http_put_response_hop_limit = 1
-    http_tokens                 = "optional"
+    http_tokens                 = "required"
   }
   monitoring {
     enabled = false
@@ -453,6 +447,21 @@ resource "aws_launch_template" "master-us-test-1a-masters-externallb-example-com
   }
   tag_specifications {
     resource_type = "volume"
+    tags = {
+      "KubernetesCluster"                                                                                     = "externallb.example.com"
+      "Name"                                                                                                  = "master-us-test-1a.masters.externallb.example.com"
+      "aws-node-termination-handler/managed"                                                                  = ""
+      "k8s.io/cluster-autoscaler/node-template/label/kops.k8s.io/kops-controller-pki"                         = ""
+      "k8s.io/cluster-autoscaler/node-template/label/node-role.kubernetes.io/control-plane"                   = ""
+      "k8s.io/cluster-autoscaler/node-template/label/node.kubernetes.io/exclude-from-external-load-balancers" = ""
+      "k8s.io/role/control-plane"                                                                             = "1"
+      "k8s.io/role/master"                                                                                    = "1"
+      "kops.k8s.io/instancegroup"                                                                             = "master-us-test-1a"
+      "kubernetes.io/cluster/externallb.example.com"                                                          = "owned"
+    }
+  }
+  tag_specifications {
+    resource_type = "network-interface"
     tags = {
       "KubernetesCluster"                                                                                     = "externallb.example.com"
       "Name"                                                                                                  = "master-us-test-1a.masters.externallb.example.com"
@@ -506,7 +515,7 @@ resource "aws_launch_template" "nodes-externallb-example-com" {
     http_endpoint               = "enabled"
     http_protocol_ipv6          = "disabled"
     http_put_response_hop_limit = 1
-    http_tokens                 = "optional"
+    http_tokens                 = "required"
   }
   monitoring {
     enabled = false
@@ -532,6 +541,18 @@ resource "aws_launch_template" "nodes-externallb-example-com" {
   }
   tag_specifications {
     resource_type = "volume"
+    tags = {
+      "KubernetesCluster"                                                          = "externallb.example.com"
+      "Name"                                                                       = "nodes.externallb.example.com"
+      "aws-node-termination-handler/managed"                                       = ""
+      "k8s.io/cluster-autoscaler/node-template/label/node-role.kubernetes.io/node" = ""
+      "k8s.io/role/node"                                                           = "1"
+      "kops.k8s.io/instancegroup"                                                  = "nodes"
+      "kubernetes.io/cluster/externallb.example.com"                               = "owned"
+    }
+  }
+  tag_specifications {
+    resource_type = "network-interface"
     tags = {
       "KubernetesCluster"                                                          = "externallb.example.com"
       "Name"                                                                       = "nodes.externallb.example.com"
@@ -689,6 +710,14 @@ resource "aws_s3_object" "kops-version-txt" {
   bucket                 = "testingBucket"
   content                = file("${path.module}/data/aws_s3_object_kops-version.txt_content")
   key                    = "clusters.example.com/externallb.example.com/kops-version.txt"
+  provider               = aws.files
+  server_side_encryption = "AES256"
+}
+
+resource "aws_s3_object" "manifests-channels-kops-channels" {
+  bucket                 = "testingBucket"
+  content                = file("${path.module}/data/aws_s3_object_manifests-channels-kops-channels_content")
+  key                    = "clusters.example.com/externallb.example.com/manifests/channels/kops-channels.yaml"
   provider               = aws.files
   server_side_encryption = "AES256"
 }

@@ -17,6 +17,7 @@ limitations under the License.
 package deployer
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -53,16 +54,10 @@ func (d *deployer) Down() error {
 		"--name", d.ClusterName,
 		"--yes",
 	}
-	version, err := kops.GetVersion(d.KopsBinaryPath)
-	if err != nil {
-		return err
-	}
-	if version > "1.29" {
-		args = append(args,
-			"--interval=60s",
-			"--wait=60m",
-		)
-	}
+	args = append(args,
+		"--interval=60s",
+		"--wait=60m",
+	)
 	klog.Info(strings.Join(args, " "))
 	cmd := exec.Command(args[0], args[1:]...)
 	cmd.SetEnv(d.env()...)
@@ -72,9 +67,24 @@ func (d *deployer) Down() error {
 		return err
 	}
 
-	if d.CloudProvider == "gce" && d.createBucket {
-		gce.DeleteGCSBucket(d.stateStore(), d.GCPProject)
-		gce.DeleteGCSBucket(d.stagingStore(), d.GCPProject)
+	switch d.CloudProvider {
+	case "aws":
+		ctx := context.Background()
+		if d.createStateStore {
+			if err := d.aws.DeleteS3Bucket(ctx, d.stateStore()); err != nil {
+				return err
+			}
+		}
+		if d.createDiscoveryStore {
+			if err := d.aws.DeleteS3Bucket(ctx, d.discoveryStore()); err != nil {
+				return err
+			}
+		}
+	case "gce":
+		if d.createStateStore {
+			gce.DeleteGCSBucket(d.stateStore(), d.GCPProject)
+			gce.DeleteGCSBucket(d.stagingStore(), d.GCPProject)
+		}
 	}
 
 	if d.boskos != nil {

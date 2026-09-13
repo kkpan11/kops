@@ -42,7 +42,7 @@ const (
 func EncodeGCELabel(s string) string {
 	var b bytes.Buffer
 
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		c := s[i]
 		if ('0' <= c && c <= '9') || ('a' <= c && c <= 'z') {
 			b.WriteByte(c)
@@ -58,7 +58,7 @@ func EncodeGCELabel(s string) string {
 
 // DecodeGCELabel reverse EncodeGCELabel, taking the encoded RFC1035 compatible value back to a string
 func DecodeGCELabel(s string) (string, error) {
-	uriForm := strings.Replace(s, "-", "%", -1)
+	uriForm := strings.ReplaceAll(s, "-", "%")
 	v, err := url.QueryUnescape(uriForm)
 	if err != nil {
 		return "", fmt.Errorf("cannot decode GCE label: %q", s)

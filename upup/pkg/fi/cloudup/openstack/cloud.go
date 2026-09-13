@@ -17,38 +17,38 @@ limitations under the License.
 package openstack
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/blang/semver/v4"
-	"github.com/gophercloud/gophercloud"
-	"github.com/gophercloud/gophercloud/openstack"
-	cinder "github.com/gophercloud/gophercloud/openstack/blockstorage/v3/volumes"
-	az "github.com/gophercloud/gophercloud/openstack/compute/v2/extensions/availabilityzones"
-	"github.com/gophercloud/gophercloud/openstack/compute/v2/extensions/keypairs"
-	"github.com/gophercloud/gophercloud/openstack/compute/v2/extensions/servergroups"
-	"github.com/gophercloud/gophercloud/openstack/compute/v2/extensions/volumeattach"
-	"github.com/gophercloud/gophercloud/openstack/compute/v2/flavors"
-	"github.com/gophercloud/gophercloud/openstack/compute/v2/servers"
-	"github.com/gophercloud/gophercloud/openstack/dns/v2/recordsets"
-	"github.com/gophercloud/gophercloud/openstack/dns/v2/zones"
-	"github.com/gophercloud/gophercloud/openstack/imageservice/v2/images"
-	"github.com/gophercloud/gophercloud/openstack/loadbalancer/v2/apiversions"
-	"github.com/gophercloud/gophercloud/openstack/loadbalancer/v2/listeners"
-	"github.com/gophercloud/gophercloud/openstack/loadbalancer/v2/loadbalancers"
-	"github.com/gophercloud/gophercloud/openstack/loadbalancer/v2/monitors"
-	v2pools "github.com/gophercloud/gophercloud/openstack/loadbalancer/v2/pools"
-	l3floatingip "github.com/gophercloud/gophercloud/openstack/networking/v2/extensions/layer3/floatingips"
-	"github.com/gophercloud/gophercloud/openstack/networking/v2/extensions/layer3/routers"
-	sg "github.com/gophercloud/gophercloud/openstack/networking/v2/extensions/security/groups"
-	sgr "github.com/gophercloud/gophercloud/openstack/networking/v2/extensions/security/rules"
-	"github.com/gophercloud/gophercloud/openstack/networking/v2/networks"
-	"github.com/gophercloud/gophercloud/openstack/networking/v2/ports"
-	"github.com/gophercloud/gophercloud/openstack/networking/v2/subnets"
+	"github.com/gophercloud/gophercloud/v2"
+	"github.com/gophercloud/gophercloud/v2/openstack"
+	cinder "github.com/gophercloud/gophercloud/v2/openstack/blockstorage/v3/volumes"
+	az "github.com/gophercloud/gophercloud/v2/openstack/compute/v2/availabilityzones"
+	"github.com/gophercloud/gophercloud/v2/openstack/compute/v2/flavors"
+	"github.com/gophercloud/gophercloud/v2/openstack/compute/v2/keypairs"
+	"github.com/gophercloud/gophercloud/v2/openstack/compute/v2/servergroups"
+	"github.com/gophercloud/gophercloud/v2/openstack/compute/v2/servers"
+	"github.com/gophercloud/gophercloud/v2/openstack/compute/v2/volumeattach"
+	"github.com/gophercloud/gophercloud/v2/openstack/dns/v2/recordsets"
+	"github.com/gophercloud/gophercloud/v2/openstack/dns/v2/zones"
+	"github.com/gophercloud/gophercloud/v2/openstack/image/v2/images"
+	"github.com/gophercloud/gophercloud/v2/openstack/loadbalancer/v2/apiversions"
+	"github.com/gophercloud/gophercloud/v2/openstack/loadbalancer/v2/listeners"
+	"github.com/gophercloud/gophercloud/v2/openstack/loadbalancer/v2/loadbalancers"
+	"github.com/gophercloud/gophercloud/v2/openstack/loadbalancer/v2/monitors"
+	v2pools "github.com/gophercloud/gophercloud/v2/openstack/loadbalancer/v2/pools"
+	l3floatingip "github.com/gophercloud/gophercloud/v2/openstack/networking/v2/extensions/layer3/floatingips"
+	"github.com/gophercloud/gophercloud/v2/openstack/networking/v2/extensions/layer3/routers"
+	sg "github.com/gophercloud/gophercloud/v2/openstack/networking/v2/extensions/security/groups"
+	sgr "github.com/gophercloud/gophercloud/v2/openstack/networking/v2/extensions/security/rules"
+	"github.com/gophercloud/gophercloud/v2/openstack/networking/v2/networks"
+	"github.com/gophercloud/gophercloud/v2/openstack/networking/v2/ports"
+	"github.com/gophercloud/gophercloud/v2/openstack/networking/v2/subnets"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
@@ -117,7 +117,7 @@ type OpenstackCloud interface {
 	ListInstances(servers.ListOptsBuilder) ([]servers.Server, error)
 
 	// CreateInstance will create an openstack server provided create opts
-	CreateInstance(servers.CreateOptsBuilder, string) (*servers.Server, error)
+	CreateInstance(servers.CreateOptsBuilder, servers.SchedulerHintOptsBuilder, string) (*servers.Server, error)
 
 	// DeleteInstanceWithID will delete instance
 	DeleteInstanceWithID(instanceID string) error
@@ -319,7 +319,7 @@ type openstackCloud struct {
 	useVIPACL       *bool
 }
 
-var _ fi.Cloud = &openstackCloud{}
+var _ fi.Cloud = (*openstackCloud)(nil)
 
 var openstackCloudInstances = make(map[string]OpenstackCloud)
 
@@ -361,7 +361,7 @@ func NewOpenstackCloud(cluster *kops.Cluster, uagent string) (OpenstackCloud, er
 
 	klog.V(2).Info("authenticating to keystone")
 
-	err = openstack.Authenticate(provider, authOption)
+	err = openstack.Authenticate(context.TODO(), provider, authOption)
 	if err != nil {
 		return nil, fmt.Errorf("error building openstack authenticated client: %v", err)
 	}
@@ -373,7 +373,7 @@ func NewOpenstackCloud(cluster *kops.Cluster, uagent string) (OpenstackCloud, er
 		}
 		return buildClients(provider, tags, cluster.Spec.CloudProvider.Openstack, config, region, hasDNS)
 	}
-	// used by protokube
+	// used when no cluster is available
 	return buildClients(provider, nil, nil, config, region, false)
 }
 
@@ -404,7 +404,7 @@ func buildClients(provider *gophercloud.ProviderClient, tags map[string]string, 
 	// 2.47 is the minimum version where the compute API /server/details returns flavor names
 	novaClient.Microversion = "2.47"
 
-	glanceClient, err := openstack.NewImageServiceV2(provider, gophercloud.EndpointOpts{
+	glanceClient, err := openstack.NewImageV2(provider, gophercloud.EndpointOpts{
 		Type:   "image",
 		Region: region,
 	})
@@ -477,7 +477,7 @@ func buildLoadBalancerClient(c *openstackCloud, spec *kops.OpenstackSpec, provid
 			if err != nil || len(lbNet) != 1 {
 				return fmt.Errorf("could not establish floating network id")
 			}
-			spec.Loadbalancer.FloatingNetworkID = fi.PtrTo(lbNet[0].ID)
+			spec.Loadbalancer.FloatingNetworkID = new(lbNet[0].ID)
 		}
 
 		if spec.Loadbalancer.UseOctavia != nil {
@@ -616,6 +616,29 @@ func InstanceInClusterAndIG(instance servers.Server, clusterName string, instanc
 	return true
 }
 
+func deletePorts(c OpenstackCloud, instanceGroupName string, clusterName string) error {
+	tags := []string{
+		fmt.Sprintf("%s=%s", TagClusterName, clusterName),
+		fmt.Sprintf("%s=%s", TagKopsInstanceGroup, instanceGroupName),
+	}
+
+	ports, err := c.ListPorts(ports.ListOpts{Tags: strings.Join(tags, ",")})
+	if err != nil {
+		return fmt.Errorf("could not list ports %v", err)
+	}
+
+	for _, port := range ports {
+		klog.V(2).Infof("Delete port '%s' (%s)", port.Name, port.ID)
+		err := c.DeletePort(port.ID)
+
+		if err != nil {
+			return fmt.Errorf("could not delete port %q: %v", port.ID, err)
+		}
+	}
+
+	return nil
+}
+
 func deleteGroup(c OpenstackCloud, g *cloudinstances.CloudInstanceGroup) error {
 	cluster := g.Raw.(*kops.Cluster)
 	allInstances, err := c.ListInstances(servers.ListOpts{
@@ -638,18 +661,10 @@ func deleteGroup(c OpenstackCloud, g *cloudinstances.CloudInstanceGroup) error {
 			return fmt.Errorf("could not delete instance %q: %v", instance.ID, err)
 		}
 	}
-	ports, err := c.ListPorts(ports.ListOpts{})
-	if err != nil {
-		return fmt.Errorf("could not list ports %v", err)
-	}
 
-	for _, port := range ports {
-		if strings.HasPrefix(port.Name, fmt.Sprintf("port-%s", g.InstanceGroup.Name)) && fi.ArrayContains(port.Tags, fmt.Sprintf("%s=%s", TagClusterName, cluster.Name)) {
-			err := c.DeletePort(port.ID)
-			if err != nil {
-				return fmt.Errorf("could not delete port %q: %v", port.ID, err)
-			}
-		}
+	err = deletePorts(c, g.InstanceGroup.Name, cluster.Name)
+	if err != nil {
+		return err
 	}
 
 	sgName := g.InstanceGroup.Name
@@ -714,7 +729,7 @@ func useLoadBalancerVIPACL(c OpenstackCloud) (bool, error) {
 	if c.LoadBalancerClient() == nil {
 		return false, nil
 	}
-	allPages, err := apiversions.List(c.LoadBalancerClient()).AllPages()
+	allPages, err := apiversions.List(c.LoadBalancerClient()).AllPages(context.TODO())
 	if err != nil {
 		return false, err
 	}
@@ -795,7 +810,7 @@ func getIPIngressStatus(c OpenstackCloud, cluster *kops.Cluster) (ingresses []fi
 			val2, ok2 := instance.Metadata["KopsRole"]
 			if ok && val == cluster.Name && ok2 {
 				role, success := kops.ParseInstanceGroupRole(val2, false)
-				if success && role == kops.InstanceGroupRoleControlPlane {
+				if success && role.HasControlPlane() {
 					ifName := instance.Metadata[TagKopsNetwork]
 					address, err := GetServerFixedIP(&instance, ifName)
 					if err == nil {
@@ -829,7 +844,7 @@ func getIPIngressStatus(c OpenstackCloud, cluster *kops.Cluster) (ingresses []fi
 }
 
 func isNotFound(err error) bool {
-	if _, ok := err.(gophercloud.ErrDefault404); ok {
+	if gophercloud.ResponseCodeIs(err, http.StatusNotFound) {
 		return true
 	}
 
@@ -844,97 +859,4 @@ func isNotFound(err error) bool {
 	}
 
 	return false
-}
-
-func MakeCloudConfig(osc *kops.OpenstackSpec) []string {
-	var lines []string
-
-	// Support mapping of older keystone API
-	tenantName := os.Getenv("OS_TENANT_NAME")
-	if tenantName == "" {
-		tenantName = os.Getenv("OS_PROJECT_NAME")
-	}
-	tenantID := os.Getenv("OS_TENANT_ID")
-	if tenantID == "" {
-		tenantID = os.Getenv("OS_PROJECT_ID")
-	}
-	lines = append(lines,
-		fmt.Sprintf("auth-url=\"%s\"", os.Getenv("OS_AUTH_URL")),
-		fmt.Sprintf("username=\"%s\"", os.Getenv("OS_USERNAME")),
-		fmt.Sprintf("password=\"%s\"", os.Getenv("OS_PASSWORD")),
-		fmt.Sprintf("region=\"%s\"", os.Getenv("OS_REGION_NAME")),
-		fmt.Sprintf("tenant-id=\"%s\"", tenantID),
-		fmt.Sprintf("tenant-name=\"%s\"", tenantName),
-		fmt.Sprintf("domain-name=\"%s\"", os.Getenv("OS_DOMAIN_NAME")),
-		fmt.Sprintf("domain-id=\"%s\"", os.Getenv("OS_DOMAIN_ID")),
-		fmt.Sprintf("application-credential-id=\"%s\"", os.Getenv("OS_APPLICATION_CREDENTIAL_ID")),
-		fmt.Sprintf("application-credential-secret=\"%s\"", os.Getenv("OS_APPLICATION_CREDENTIAL_SECRET")),
-		"",
-	)
-
-	if lb := osc.Loadbalancer; lb != nil {
-		ingressHostnameSuffix := "nip.io"
-		if fi.ValueOf(lb.IngressHostnameSuffix) != "" {
-			ingressHostnameSuffix = fi.ValueOf(lb.IngressHostnameSuffix)
-		}
-
-		lines = append(lines,
-			"[LoadBalancer]",
-			fmt.Sprintf("floating-network-id=%s", fi.ValueOf(lb.FloatingNetworkID)),
-			fmt.Sprintf("lb-method=%s", fi.ValueOf(lb.Method)),
-			fmt.Sprintf("lb-provider=%s", fi.ValueOf(lb.Provider)),
-			fmt.Sprintf("use-octavia=%t", fi.ValueOf(lb.UseOctavia)),
-			fmt.Sprintf("manage-security-groups=%t", fi.ValueOf(lb.ManageSecGroups)),
-			fmt.Sprintf("enable-ingress-hostname=%t", fi.ValueOf(lb.EnableIngressHostname)),
-			fmt.Sprintf("ingress-hostname-suffix=%s", ingressHostnameSuffix),
-			"",
-		)
-
-		if monitor := osc.Monitor; monitor != nil {
-			lines = append(lines,
-				"create-monitor=yes",
-				fmt.Sprintf("monitor-delay=%s", fi.ValueOf(monitor.Delay)),
-				fmt.Sprintf("monitor-timeout=%s", fi.ValueOf(monitor.Timeout)),
-				fmt.Sprintf("monitor-max-retries=%d", fi.ValueOf(monitor.MaxRetries)),
-				"",
-			)
-		}
-	}
-
-	if bs := osc.BlockStorage; bs != nil {
-		// Block Storage Config
-		lines = append(lines,
-			"[BlockStorage]",
-			fmt.Sprintf("bs-version=%s", fi.ValueOf(bs.Version)),
-			fmt.Sprintf("ignore-volume-az=%t", fi.ValueOf(bs.IgnoreAZ)),
-			fmt.Sprintf("ignore-volume-microversion=%t", fi.ValueOf(bs.IgnoreVolumeMicroVersion)),
-			"")
-	}
-
-	if networking := osc.Network; networking != nil {
-		// Networking Config
-		// https://github.com/kubernetes/cloud-provider-openstack/blob/master/docs/openstack-cloud-controller-manager/using-openstack-cloud-controller-manager.md#networking
-		var networkingLines []string
-
-		if networking.IPv6SupportDisabled != nil {
-			networkingLines = append(networkingLines, fmt.Sprintf("ipv6-support-disabled=%t", fi.ValueOf(networking.IPv6SupportDisabled)))
-		}
-		for _, name := range networking.PublicNetworkNames {
-			networkingLines = append(networkingLines, fmt.Sprintf("public-network-name=%s", fi.ValueOf(name)))
-		}
-		for _, name := range networking.InternalNetworkNames {
-			networkingLines = append(networkingLines, fmt.Sprintf("internal-network-name=%s", fi.ValueOf(name)))
-		}
-		if networking.AddressSortOrder != nil {
-			networkingLines = append(networkingLines, fmt.Sprintf("address-sort-order=%s", fi.ValueOf(networking.AddressSortOrder)))
-		}
-
-		if len(networkingLines) > 0 {
-			lines = append(lines, "[Networking]")
-			lines = append(lines, networkingLines...)
-			lines = append(lines, "")
-		}
-	}
-
-	return lines
 }

@@ -4,11 +4,8 @@ package route53
 
 import (
 	"context"
-	"fmt"
-	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/service/route53/types"
 	"github.com/aws/smithy-go/middleware"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
 // Lists all the private hosted zones that a specified VPC is associated with,
@@ -24,6 +21,10 @@ import (
 //     that created and owns the hosted zone. For example, if a hosted zone was created
 //     by Amazon Elastic File System (Amazon EFS), the value of Owner is
 //     efs.amazonaws.com .
+//
+// ListHostedZonesByVPC returns the hosted zones associated with the specified VPC
+// and does not reflect the hosted zone associations to VPCs via Route 53 Profiles.
+// To get the associations to a Profile, call the [ListProfileResourceAssociations]API.
 //
 // When listing private hosted zones, the hosted zone and the Amazon VPC must
 // belong to the same partition where the hosted zones were created. A partition is
@@ -41,6 +42,7 @@ import (
 // For more information, see [Access Management] in the Amazon Web Services General Reference.
 //
 // [Access Management]: https://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html
+// [ListProfileResourceAssociations]: https://docs.aws.amazon.com/Route53/latest/APIReference/API_route53profiles_ListProfileResourceAssociations.html
 func (c *Client) ListHostedZonesByVPC(ctx context.Context, params *ListHostedZonesByVPCInput, optFns ...func(*Options)) (*ListHostedZonesByVPCOutput, error) {
 	if params == nil {
 		params = &ListHostedZonesByVPCInput{}
@@ -119,9 +121,6 @@ type ListHostedZonesByVPCOutput struct {
 }
 
 func (c *Client) addOperationListHostedZonesByVPCMiddlewares(stack *middleware.Stack, options Options) (err error) {
-	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
-		return err
-	}
 	err = stack.Serialize.Add(&awsRestxml_serializeOpListHostedZonesByVPC{}, middleware.After)
 	if err != nil {
 		return err
@@ -130,19 +129,7 @@ func (c *Client) addOperationListHostedZonesByVPCMiddlewares(stack *middleware.S
 	if err != nil {
 		return err
 	}
-	if err := addProtocolFinalizerMiddlewares(stack, options, "ListHostedZonesByVPC"); err != nil {
-		return fmt.Errorf("add protocol finalizers: %v", err)
-	}
 
-	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
-		return err
-	}
-	if err = addSetLoggerMiddleware(stack, options); err != nil {
-		return err
-	}
-	if err = addClientRequestID(stack); err != nil {
-		return err
-	}
 	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
@@ -152,40 +139,13 @@ func (c *Client) addOperationListHostedZonesByVPCMiddlewares(stack *middleware.S
 	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetry(stack, options); err != nil {
+	if err = addRecordResponseTiming(stack, options); err != nil {
 		return err
 	}
-	if err = addRawResponseToMetadata(stack); err != nil {
-		return err
-	}
-	if err = addRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack, options); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addTimeOffsetBuild(stack, c); err != nil {
-		return err
-	}
-	if err = addUserAgentRetryMode(stack, options); err != nil {
+	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
 	if err = addOpListHostedZonesByVPCValidationMiddleware(stack); err != nil {
-		return err
-	}
-	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opListHostedZonesByVPC(options.Region), middleware.Before); err != nil {
-		return err
-	}
-	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -200,13 +160,8 @@ func (c *Client) addOperationListHostedZonesByVPCMiddlewares(stack *middleware.S
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
-	return nil
-}
-
-func newServiceMetadataMiddleware_opListHostedZonesByVPC(region string) *awsmiddleware.RegisterServiceMetadata {
-	return &awsmiddleware.RegisterServiceMetadata{
-		Region:        region,
-		ServiceID:     ServiceID,
-		OperationName: "ListHostedZonesByVPC",
+	if err = addInterceptors(stack, options); err != nil {
+		return err
 	}
+	return nil
 }

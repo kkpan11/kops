@@ -4,10 +4,7 @@ package sqs
 
 import (
 	"context"
-	"fmt"
-	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/smithy-go/middleware"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
 // Changes the visibility timeout of a specified message in a queue to a new
@@ -49,7 +46,7 @@ import (
 // You can also increase the number of queues you use to process your messages. To
 // request a limit increase, [file a support request].
 //
-// For FIFO queues, there can be a maximum of 20,000 in flight messages (received
+// For FIFO queues, there can be a maximum of 120,000 in flight messages (received
 // from a queue by a consumer, but not yet deleted from the queue). If you reach
 // this limit, Amazon SQS returns no error messages.
 //
@@ -113,9 +110,6 @@ type ChangeMessageVisibilityOutput struct {
 }
 
 func (c *Client) addOperationChangeMessageVisibilityMiddlewares(stack *middleware.Stack, options Options) (err error) {
-	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
-		return err
-	}
 	err = stack.Serialize.Add(&awsAwsjson10_serializeOpChangeMessageVisibility{}, middleware.After)
 	if err != nil {
 		return err
@@ -124,19 +118,7 @@ func (c *Client) addOperationChangeMessageVisibilityMiddlewares(stack *middlewar
 	if err != nil {
 		return err
 	}
-	if err := addProtocolFinalizerMiddlewares(stack, options, "ChangeMessageVisibility"); err != nil {
-		return fmt.Errorf("add protocol finalizers: %v", err)
-	}
 
-	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
-		return err
-	}
-	if err = addSetLoggerMiddleware(stack, options); err != nil {
-		return err
-	}
-	if err = addClientRequestID(stack); err != nil {
-		return err
-	}
 	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
@@ -146,40 +128,13 @@ func (c *Client) addOperationChangeMessageVisibilityMiddlewares(stack *middlewar
 	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetry(stack, options); err != nil {
+	if err = addRecordResponseTiming(stack, options); err != nil {
 		return err
 	}
-	if err = addRawResponseToMetadata(stack); err != nil {
-		return err
-	}
-	if err = addRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack, options); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addTimeOffsetBuild(stack, c); err != nil {
-		return err
-	}
-	if err = addUserAgentRetryMode(stack, options); err != nil {
+	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
 	if err = addOpChangeMessageVisibilityValidationMiddleware(stack); err != nil {
-		return err
-	}
-	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opChangeMessageVisibility(options.Region), middleware.Before); err != nil {
-		return err
-	}
-	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -194,13 +149,8 @@ func (c *Client) addOperationChangeMessageVisibilityMiddlewares(stack *middlewar
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
-	return nil
-}
-
-func newServiceMetadataMiddleware_opChangeMessageVisibility(region string) *awsmiddleware.RegisterServiceMetadata {
-	return &awsmiddleware.RegisterServiceMetadata{
-		Region:        region,
-		ServiceID:     ServiceID,
-		OperationName: "ChangeMessageVisibility",
+	if err = addInterceptors(stack, options); err != nil {
+		return err
 	}
+	return nil
 }

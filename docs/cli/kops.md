@@ -16,11 +16,13 @@ kOps is Kubernetes Operations.
 ### Options
 
 ```
-      --config string   yaml config file (default is $HOME/.kops.yaml)
-  -h, --help            help for kops
-      --name string     Name of cluster. Overrides KOPS_CLUSTER_NAME environment variable
-      --state string    Location of state storage (kops 'config' file). Overrides KOPS_STATE_STORE environment variable
-  -v, --v Level         number for the log level verbosity
+      --alsologtostderrthreshold severity   logs at or above this threshold go to stderr when -alsologtostderr=true (no effect when -logtostderr=true)
+      --config string                       yaml config file (default is $HOME/.kops.yaml)
+  -h, --help                                help for kops
+      --legacy_stderr_threshold_behavior    If true, stderrthreshold is ignored when logtostderr=true (legacy behavior). If false, stderrthreshold is honored even when logtostderr=true
+      --name string                         Name of cluster. Overrides KOPS_CLUSTER_NAME environment variable
+      --state string                        Location of state storage (kops 'config' file). Overrides KOPS_STATE_STORE environment variable
+  -v, --v Level                             number for the log level verbosity
 ```
 
 ### SEE ALSO
@@ -33,6 +35,7 @@ kOps is Kubernetes Operations.
 * [kops export](kops_export.md)	 - Export configuration.
 * [kops get](kops_get.md)	 - Get one or many resources.
 * [kops promote](kops_promote.md)	 - Promote a resource.
+* [kops reconcile](kops_reconcile.md)	 - Reconcile a cluster.
 * [kops replace](kops_replace.md)	 - Replace cluster resources.
 * [kops rolling-update](kops_rolling-update.md)	 - Rolling update a cluster.
 * [kops toolbox](kops_toolbox.md)	 - Miscellaneous, experimental, or infrequently used commands.

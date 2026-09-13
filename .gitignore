@@ -92,3 +92,12 @@ _output
 # Used by E2E testing
 _artifacts
 _rundir
+
+# kustomize helm chart cache
+charts/
+
+# Ignore asdf .tool-versions file
+.tool-versions
+
+# Ignore direnv configuration file
+.envrc

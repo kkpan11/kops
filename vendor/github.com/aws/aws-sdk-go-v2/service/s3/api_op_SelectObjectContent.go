@@ -4,8 +4,6 @@ package s3
 
 import (
 	"context"
-	"fmt"
-	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	s3cust "github.com/aws/aws-sdk-go-v2/service/s3/internal/customizations"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
@@ -14,11 +12,7 @@ import (
 	"sync"
 )
 
-// This operation is not supported by directory buckets.
-//
-// The SelectObjectContent operation is no longer available to new customers.
-// Existing customers of Amazon S3 Select can continue to use the operation as
-// usual. [Learn more]
+// This operation is not supported for directory buckets.
 //
 // This action filters the contents of an Amazon S3 object based on a simple
 // structured query language (SQL) statement. In the request, along with the SQL
@@ -93,17 +87,20 @@ import (
 //
 // [PutBucketLifecycleConfiguration]
 //
-// [Learn more]: http://aws.amazon.com/blogs/storage/how-to-optimize-querying-your-data-in-amazon-s3/
+// You must URL encode any signed header values that contain spaces. For example,
+// if your header value is my file.txt , containing two spaces after my , you must
+// URL encode this value to my%20%20file.txt .
+//
+// [Appendix: SelectObjectContent Response]: https://docs.aws.amazon.com/AmazonS3/latest/API/RESTSelectObjectAppendix.html
 // [Selecting Content from Objects]: https://docs.aws.amazon.com/AmazonS3/latest/dev/selecting-content-from-objects.html
 // [PutBucketLifecycleConfiguration]: https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutBucketLifecycleConfiguration.html
+// [SelectObjectContentRequest - ScanRange]: https://docs.aws.amazon.com/AmazonS3/latest/API/API_SelectObjectContent.html#AmazonS3-SelectObjectContent-request-ScanRange
 // [List of SELECT Object Content Error Codes]: https://docs.aws.amazon.com/AmazonS3/latest/API/ErrorResponses.html#SelectObjectContentErrorCodeList
 // [GetBucketLifecycleConfiguration]: https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetBucketLifecycleConfiguration.html
 // [Using Amazon S3 storage classes]: https://docs.aws.amazon.com/AmazonS3/latest/userguide/storage-class-intro.html
 // [SELECT Command]: https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-glacier-select-sql-reference-select.html
-// [Specifying Permissions in a Policy]: https://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
-// [Appendix: SelectObjectContent Response]: https://docs.aws.amazon.com/AmazonS3/latest/API/RESTSelectObjectAppendix.html
-// [SelectObjectContentRequest - ScanRange]: https://docs.aws.amazon.com/AmazonS3/latest/API/API_SelectObjectContent.html#AmazonS3-SelectObjectContent-request-ScanRange
 // [GetObject]: https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html
+// [Specifying Permissions in a Policy]: https://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
 //
 // [Server-Side Encryption (Using Customer-Provided Encryption Keys)]: https://docs.aws.amazon.com/AmazonS3/latest/dev/ServerSideEncryptionCustomerKeys.html
 // [Protecting Data Using Server-Side Encryption]: https://docs.aws.amazon.com/AmazonS3/latest/dev/serv-side-encryption.html
@@ -234,9 +231,6 @@ func (o *SelectObjectContentOutput) GetStream() *SelectObjectContentEventStream 
 }
 
 func (c *Client) addOperationSelectObjectContentMiddlewares(stack *middleware.Stack, options Options) (err error) {
-	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
-		return err
-	}
 	err = stack.Serialize.Add(&awsRestxml_serializeOpSelectObjectContent{}, middleware.After)
 	if err != nil {
 		return err
@@ -245,20 +239,8 @@ func (c *Client) addOperationSelectObjectContentMiddlewares(stack *middleware.St
 	if err != nil {
 		return err
 	}
-	if err := addProtocolFinalizerMiddlewares(stack, options, "SelectObjectContent"); err != nil {
-		return fmt.Errorf("add protocol finalizers: %v", err)
-	}
 
-	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
-		return err
-	}
 	if err = addEventStreamSelectObjectContentMiddleware(stack, options); err != nil {
-		return err
-	}
-	if err = addSetLoggerMiddleware(stack, options); err != nil {
-		return err
-	}
-	if err = addClientRequestID(stack); err != nil {
 		return err
 	}
 	if err = addComputeContentLength(stack); err != nil {
@@ -270,43 +252,22 @@ func (c *Client) addOperationSelectObjectContentMiddlewares(stack *middleware.St
 	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetry(stack, options); err != nil {
-		return err
-	}
-	if err = addRawResponseToMetadata(stack); err != nil {
-		return err
-	}
-	if err = addRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack, options); err != nil {
-		return err
-	}
-	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
+	if err = addRecordResponseTiming(stack, options); err != nil {
 		return err
 	}
 	if err = addPutBucketContextMiddleware(stack); err != nil {
 		return err
 	}
-	if err = addTimeOffsetBuild(stack, c); err != nil {
-		return err
-	}
-	if err = addUserAgentRetryMode(stack, options); err != nil {
-		return err
-	}
 	if err = addIsExpressUserAgent(stack); err != nil {
+		return err
+	}
+	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
 	if err = addOpSelectObjectContentValidationMiddleware(stack); err != nil {
 		return err
 	}
-	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opSelectObjectContent(options.Region), middleware.Before); err != nil {
-		return err
-	}
 	if err = addMetadataRetrieverMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addSelectObjectContentUpdateEndpoint(stack, options); err != nil {
@@ -330,6 +291,9 @@ func (c *Client) addOperationSelectObjectContentMiddlewares(stack *middleware.St
 	if err = addSerializeImmutableHostnameBucketMiddleware(stack, options); err != nil {
 		return err
 	}
+	if err = addInterceptors(stack, options); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -338,14 +302,6 @@ func (v *SelectObjectContentInput) bucket() (string, bool) {
 		return "", false
 	}
 	return *v.Bucket, true
-}
-
-func newServiceMetadataMiddleware_opSelectObjectContent(region string) *awsmiddleware.RegisterServiceMetadata {
-	return &awsmiddleware.RegisterServiceMetadata{
-		Region:        region,
-		ServiceID:     ServiceID,
-		OperationName: "SelectObjectContent",
-	}
 }
 
 // getSelectObjectContentBucketMember returns a pointer to string denoting a

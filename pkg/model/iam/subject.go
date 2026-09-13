@@ -64,7 +64,7 @@ func (_ *NodeRoleNode) ServiceAccount() (types.NamespacedName, bool) {
 	return types.NamespacedName{}, false
 }
 
-// NodeRoleNode represents the role of bastion nodes, and implements Subject.
+// NodeRoleBastion represents the role of bastion nodes, and implements Subject.
 type NodeRoleBastion struct{}
 
 // ServiceAccount implements Subject.
@@ -124,7 +124,7 @@ func addServiceAccountRoleForAWS(context *IAMModelContext, podSpec *corev1.PodSp
 	}
 
 	awsRoleARN := "arn:" + context.AWSPartition + ":iam::" + context.AWSAccountID + ":role/" + roleName
-	tokenDir := "/var/run/secrets/amazonaws.com/"
+	tokenDir := "/var/run/secrets/amazonaws.com/" //nolint:gosec // This is the projected token directory path, not a credential.
 	tokenName := "token"
 
 	volume := corev1.Volume{

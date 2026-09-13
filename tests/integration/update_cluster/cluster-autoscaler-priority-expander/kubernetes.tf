@@ -482,12 +482,6 @@ resource "aws_iam_role_policy" "masters-cas-priority-expander-example-com" {
   role   = aws_iam_role.masters-cas-priority-expander-example-com.name
 }
 
-resource "aws_iam_role_policy" "nodes-cas-priority-expander-example-com" {
-  name   = "nodes.cas-priority-expander.example.com"
-  policy = file("${path.module}/data/aws_iam_role_policy_nodes.cas-priority-expander.example.com_policy")
-  role   = aws_iam_role.nodes-cas-priority-expander-example-com.name
-}
-
 resource "aws_internet_gateway" "cas-priority-expander-example-com" {
   tags = {
     "KubernetesCluster"                                       = "cas-priority-expander.example.com"
@@ -536,7 +530,7 @@ resource "aws_launch_template" "master-us-test-1a-masters-cas-priority-expander-
     http_endpoint               = "enabled"
     http_protocol_ipv6          = "disabled"
     http_put_response_hop_limit = 1
-    http_tokens                 = "optional"
+    http_tokens                 = "required"
   }
   monitoring {
     enabled = false
@@ -565,6 +559,21 @@ resource "aws_launch_template" "master-us-test-1a-masters-cas-priority-expander-
   }
   tag_specifications {
     resource_type = "volume"
+    tags = {
+      "KubernetesCluster"                                                                                     = "cas-priority-expander.example.com"
+      "Name"                                                                                                  = "master-us-test-1a.masters.cas-priority-expander.example.com"
+      "aws-node-termination-handler/managed"                                                                  = ""
+      "k8s.io/cluster-autoscaler/node-template/label/kops.k8s.io/kops-controller-pki"                         = ""
+      "k8s.io/cluster-autoscaler/node-template/label/node-role.kubernetes.io/control-plane"                   = ""
+      "k8s.io/cluster-autoscaler/node-template/label/node.kubernetes.io/exclude-from-external-load-balancers" = ""
+      "k8s.io/role/control-plane"                                                                             = "1"
+      "k8s.io/role/master"                                                                                    = "1"
+      "kops.k8s.io/instancegroup"                                                                             = "master-us-test-1a"
+      "kubernetes.io/cluster/cas-priority-expander.example.com"                                               = "owned"
+    }
+  }
+  tag_specifications {
+    resource_type = "network-interface"
     tags = {
       "KubernetesCluster"                                                                                     = "cas-priority-expander.example.com"
       "Name"                                                                                                  = "master-us-test-1a.masters.cas-priority-expander.example.com"
@@ -618,7 +627,7 @@ resource "aws_launch_template" "nodes-cas-priority-expander-example-com" {
     http_endpoint               = "enabled"
     http_protocol_ipv6          = "disabled"
     http_put_response_hop_limit = 1
-    http_tokens                 = "optional"
+    http_tokens                 = "required"
   }
   monitoring {
     enabled = false
@@ -644,6 +653,18 @@ resource "aws_launch_template" "nodes-cas-priority-expander-example-com" {
   }
   tag_specifications {
     resource_type = "volume"
+    tags = {
+      "KubernetesCluster"                                                          = "cas-priority-expander.example.com"
+      "Name"                                                                       = "nodes.cas-priority-expander.example.com"
+      "aws-node-termination-handler/managed"                                       = ""
+      "k8s.io/cluster-autoscaler/node-template/label/node-role.kubernetes.io/node" = ""
+      "k8s.io/role/node"                                                           = "1"
+      "kops.k8s.io/instancegroup"                                                  = "nodes"
+      "kubernetes.io/cluster/cas-priority-expander.example.com"                    = "owned"
+    }
+  }
+  tag_specifications {
+    resource_type = "network-interface"
     tags = {
       "KubernetesCluster"                                                          = "cas-priority-expander.example.com"
       "Name"                                                                       = "nodes.cas-priority-expander.example.com"
@@ -691,7 +712,7 @@ resource "aws_launch_template" "nodes-high-priority-cas-priority-expander-exampl
     http_endpoint               = "enabled"
     http_protocol_ipv6          = "disabled"
     http_put_response_hop_limit = 1
-    http_tokens                 = "optional"
+    http_tokens                 = "required"
   }
   monitoring {
     enabled = false
@@ -717,6 +738,18 @@ resource "aws_launch_template" "nodes-high-priority-cas-priority-expander-exampl
   }
   tag_specifications {
     resource_type = "volume"
+    tags = {
+      "KubernetesCluster"                                                          = "cas-priority-expander.example.com"
+      "Name"                                                                       = "nodes-high-priority.cas-priority-expander.example.com"
+      "aws-node-termination-handler/managed"                                       = ""
+      "k8s.io/cluster-autoscaler/node-template/label/node-role.kubernetes.io/node" = ""
+      "k8s.io/role/node"                                                           = "1"
+      "kops.k8s.io/instancegroup"                                                  = "nodes-high-priority"
+      "kubernetes.io/cluster/cas-priority-expander.example.com"                    = "owned"
+    }
+  }
+  tag_specifications {
+    resource_type = "network-interface"
     tags = {
       "KubernetesCluster"                                                          = "cas-priority-expander.example.com"
       "Name"                                                                       = "nodes-high-priority.cas-priority-expander.example.com"
@@ -764,7 +797,7 @@ resource "aws_launch_template" "nodes-low-priority-cas-priority-expander-example
     http_endpoint               = "enabled"
     http_protocol_ipv6          = "disabled"
     http_put_response_hop_limit = 1
-    http_tokens                 = "optional"
+    http_tokens                 = "required"
   }
   monitoring {
     enabled = false
@@ -790,6 +823,18 @@ resource "aws_launch_template" "nodes-low-priority-cas-priority-expander-example
   }
   tag_specifications {
     resource_type = "volume"
+    tags = {
+      "KubernetesCluster"                                                          = "cas-priority-expander.example.com"
+      "Name"                                                                       = "nodes-low-priority.cas-priority-expander.example.com"
+      "aws-node-termination-handler/managed"                                       = ""
+      "k8s.io/cluster-autoscaler/node-template/label/node-role.kubernetes.io/node" = ""
+      "k8s.io/role/node"                                                           = "1"
+      "kops.k8s.io/instancegroup"                                                  = "nodes-low-priority"
+      "kubernetes.io/cluster/cas-priority-expander.example.com"                    = "owned"
+    }
+  }
+  tag_specifications {
+    resource_type = "network-interface"
     tags = {
       "KubernetesCluster"                                                          = "cas-priority-expander.example.com"
       "Name"                                                                       = "nodes-low-priority.cas-priority-expander.example.com"
@@ -955,6 +1000,14 @@ resource "aws_s3_object" "kops-version-txt" {
   bucket                 = "testingBucket"
   content                = file("${path.module}/data/aws_s3_object_kops-version.txt_content")
   key                    = "clusters.example.com/cas-priority-expander.example.com/kops-version.txt"
+  provider               = aws.files
+  server_side_encryption = "AES256"
+}
+
+resource "aws_s3_object" "manifests-channels-kops-channels" {
+  bucket                 = "testingBucket"
+  content                = file("${path.module}/data/aws_s3_object_manifests-channels-kops-channels_content")
+  key                    = "clusters.example.com/cas-priority-expander.example.com/manifests/channels/kops-channels.yaml"
   provider               = aws.files
   server_side_encryption = "AES256"
 }

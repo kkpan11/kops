@@ -19,9 +19,9 @@ package openstack
 import (
 	"strings"
 
-	osrouter "github.com/gophercloud/gophercloud/openstack/networking/v2/extensions/layer3/routers"
-	"github.com/gophercloud/gophercloud/openstack/networking/v2/networks"
-	"github.com/gophercloud/gophercloud/openstack/networking/v2/subnets"
+	osrouter "github.com/gophercloud/gophercloud/v2/openstack/networking/v2/extensions/layer3/routers"
+	"github.com/gophercloud/gophercloud/v2/openstack/networking/v2/networks"
+	"github.com/gophercloud/gophercloud/v2/openstack/networking/v2/subnets"
 
 	"k8s.io/kops/pkg/resources"
 	"k8s.io/kops/upup/pkg/fi"
@@ -39,7 +39,7 @@ const (
 
 func (os *clusterDiscoveryOS) ListNetwork() ([]*resources.Resource, error) {
 	var resourceTrackers []*resources.Resource
-	routerName := strings.Replace(os.clusterName, ".", "-", -1)
+	routerName := strings.ReplaceAll(os.clusterName, ".", "-")
 
 	projectNetworks, err := os.osCloud.ListNetworks(networks.ListOpts{})
 	if err != nil {

@@ -1,3 +1,442 @@
+# v1.72.1 (2026-08-14)
+
+* **Dependency Update**: Update to smithy-go v1.27.8.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.72.0 (2026-08-13)
+
+* **Feature**: Amazon EC2 Auto Scaling now supports terminating multiple instances in a single TerminateInstanceInAutoScalingGroup call via the new InstanceIds parameter, returning an Activities list. LaunchInstances now returns IdempotentCallInProgressFault for duplicate client tokens.
+
+# v1.71.1 (2026-08-10)
+
+* **Dependency Update**: Update to smithy-go v1.27.7.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.71.0 (2026-08-06)
+
+* **Feature**: EC2 Auto Scaling now supports being managed by other AWS services via the operator field.
+
+# v1.70.4 (2026-08-05)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.70.3 (2026-07-31.2)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+* **Dependency Update**: Upgrade to smithy-go v1.27.6 to fix various serde issues in HTTP binding services.
+
+# v1.70.2 (2026-07-29)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.70.1 (2026-07-28)
+
+* **Dependency Update**: Update to smithy-go v1.27.5.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.70.0 (2026-07-21)
+
+* **Feature**: Add an option to clients to disable clock skew
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.69.1 (2026-07-13)
+
+* No change notes available for this release.
+
+# v1.69.0 (2026-07-06)
+
+* **Feature**: Add request serialization snapshot tests.
+
+# v1.68.1 (2026-07-01)
+
+* **Bug Fix**: Bump smithy-go to 1.27.3, fix JSON encorder for document.Number, endpoint host label format validation and CBOR union serialization on new serde
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.68.0 (2026-06-30)
+
+* **Feature**: This release adds support for a new reservations-then-balanced capacity distribution strategy, which first attempts to launch instances into your Capacity Reservations and then balances remaining capacity across healthy Availability Zones.
+
+# v1.67.5 (2026-06-29)
+
+* No change notes available for this release.
+
+# v1.67.4 (2026-06-08)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.67.3 (2026-06-04)
+
+* **Dependency Update**: Update to smithy-go v1.27.1 to fix several union-related deserialization bugs in schema-serde-enabled services.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.67.2 (2026-06-03)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.67.1 (2026-06-02)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.67.0 (2026-05-29)
+
+* **Feature**: Adding new BDD representation of endpoint ruleset
+* **Dependency Update**: Update to smithy-go v1.26.0.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.66.3 (2026-05-28)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.66.2 (2026-04-29)
+
+* **Dependency Update**: Update to smithy-go v1.25.1.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.66.1 (2026-04-17)
+
+* **Dependency Update**: Bump smithy-go to 1.25.0 to support endpointBdd trait
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.66.0 (2026-04-16)
+
+* **Feature**: This release adds support for specifying Availability Zone IDs as an alternative to Availability Zone names when creating or updating Auto Scaling groups.
+
+# v1.65.0 (2026-03-30)
+
+* **Feature**: Adds support for new instance lifecycle states introduced by the instance lifecycle policy and replace root volume features.
+
+# v1.64.4 (2026-03-26)
+
+* **Bug Fix**: Fix a bug where a recorded clock skew could persist on the client even if the client and server clock ended up realigning.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.64.3 (2026-03-13)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.64.2 (2026-03-03)
+
+* **Dependency Update**: Bump minimum Go version to 1.24
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.64.1 (2026-02-23)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.64.0 (2026-01-22)
+
+* **Feature**: This release adds support for Amazon EC2 Auto Scaling group deletion protection
+
+# v1.63.0 (2026-01-20)
+
+* **Feature**: This release adds support for three new filters when describing scaling activities, StartTimeLowerBound, StartTimeUpperBound, and Status.
+
+# v1.62.5 (2026-01-09)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.62.4 (2025-12-09)
+
+* No change notes available for this release.
+
+# v1.62.3 (2025-12-08)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.62.2 (2025-12-02)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+* **Dependency Update**: Upgrade to smithy-go v1.24.0. Notably this version of the library reduces the allocation footprint of the middleware system. We observe a ~10% reduction in allocations per SDK call with this change.
+
+# v1.62.1 (2025-11-25)
+
+* **Bug Fix**: Add error check for endpoint param binding during auth scheme resolution to fix panic reported in #3234
+
+# v1.62.0 (2025-11-20)
+
+* **Feature**: This release adds support for three new features: 1) Image ID overrides in mixed instances policy, 2) Replace Root Volume - a new strategy for Instance Refresh, and 3) Instance Lifecycle Policy for enhanced instance lifecycle management.
+
+# v1.61.1 (2025-11-19.2)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.61.0 (2025-11-18)
+
+* **Feature**: This release adds the new LaunchInstances API, which can launch instances synchronously in an AutoScaling group. The API also returns instances info and launch error back immediately.
+
+# v1.60.5 (2025-11-12)
+
+* **Bug Fix**: Further reduce allocation overhead when the metrics system isn't in-use.
+* **Bug Fix**: Reduce allocation overhead when the client doesn't have any HTTP interceptors configured.
+* **Bug Fix**: Remove blank trace spans towards the beginning of the request that added no additional information. This conveys a slight reduction in overall allocations.
+
+# v1.60.4 (2025-11-11)
+
+* **Bug Fix**: Return validation error if input region is not a valid host label.
+
+# v1.60.3 (2025-11-04)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+* **Dependency Update**: Upgrade to smithy-go v1.23.2 which should convey some passive reduction of overall allocations, especially when not using the metrics system.
+
+# v1.60.2 (2025-10-30)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.60.1 (2025-10-23)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.60.0 (2025-10-22)
+
+* **Feature**: Update endpoint ruleset parameters casing
+
+# v1.59.4 (2025-10-16)
+
+* **Dependency Update**: Bump minimum Go version to 1.23.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.59.3 (2025-09-26)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.59.2 (2025-09-23)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.59.1 (2025-09-10)
+
+* No change notes available for this release.
+
+# v1.59.0 (2025-09-09)
+
+* **Feature**: Added WaitForTransitioningInstances parameter to the CancelInstanceRefresh API, allowing the caller to cancel an instance refresh without waiting for on-going launches and terminations.
+
+# v1.58.3 (2025-09-08)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.58.2 (2025-08-29)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.58.1 (2025-08-27)
+
+* **Dependency Update**: Update to smithy-go v1.23.0.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.58.0 (2025-08-25)
+
+* **Feature**: Remove incorrect endpoint tests
+
+# v1.57.2 (2025-08-21)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.57.1 (2025-08-20)
+
+* **Bug Fix**: Remove unused deserialization code.
+
+# v1.57.0 (2025-08-11)
+
+* **Feature**: Add support for configuring per-service Options via callback on global config.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.56.0 (2025-08-04)
+
+* **Feature**: Support configurable auth scheme preferences in service clients via AWS_AUTH_SCHEME_PREFERENCE in the environment, auth_scheme_preference in the config file, and through in-code settings on LoadDefaultConfig and client constructor methods.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.55.1 (2025-07-30)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.55.0 (2025-07-28)
+
+* **Feature**: Add support for HTTP interceptors.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.54.1 (2025-07-19)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.54.0 (2025-06-18)
+
+* **Feature**: Add IncludeInstances parameter to DescribeAutoScalingGroups API
+
+# v1.53.3 (2025-06-17)
+
+* **Dependency Update**: Update to smithy-go v1.22.4.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.53.2 (2025-06-10)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.53.1 (2025-06-06)
+
+* No change notes available for this release.
+
+# v1.53.0 (2025-05-29)
+
+* **Feature**: Add support for "apple" CpuManufacturer in ABIS
+
+# v1.52.4 (2025-04-17)
+
+* **Documentation**: Doc only update for EC2 Auto Scaling.
+
+# v1.52.3 (2025-04-10)
+
+* No change notes available for this release.
+
+# v1.52.2 (2025-04-03)
+
+* No change notes available for this release.
+
+# v1.52.1 (2025-03-04.2)
+
+* **Bug Fix**: Add assurance test for operation order.
+
+# v1.52.0 (2025-02-27)
+
+* **Feature**: Track credential providers via User-Agent Feature ids
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.51.13 (2025-02-18)
+
+* **Bug Fix**: Bump go version to 1.22
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.51.12 (2025-02-05)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.51.11 (2025-02-04)
+
+* No change notes available for this release.
+
+# v1.51.10 (2025-01-31)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.51.9 (2025-01-30)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.51.8 (2025-01-24)
+
+* **Bug Fix**: Switch to generated waiters, removing the dependency on go-jmespath and fixing broken waiters that used ordering comparators.
+* **Dependency Update**: Updated to the latest SDK module versions
+* **Dependency Update**: Upgrade to smithy-go v1.22.2.
+
+# v1.51.7 (2025-01-17)
+
+* **Bug Fix**: Fix bug where credentials weren't refreshed during retry loop.
+
+# v1.51.6 (2025-01-15)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.51.5 (2025-01-14)
+
+* **Bug Fix**: Fix issue where waiters were not failing on unmatched errors as they should. This may have breaking behavioral changes for users in fringe cases. See [this announcement](https://github.com/aws/aws-sdk-go-v2/discussions/2954) for more information.
+
+# v1.51.4 (2025-01-09)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.51.3 (2025-01-08)
+
+* No change notes available for this release.
+
+# v1.51.2 (2024-12-19)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.51.1 (2024-12-02)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.51.0 (2024-11-22)
+
+* **Feature**: Now, Amazon EC2 Auto Scaling customers can enable target tracking policies to take quicker scaling decisions, enhancing their application performance and EC2 utilization. To get started, specify target tracking to monitor a metric that is available on Amazon CloudWatch at seconds-level interval.
+
+# v1.50.0 (2024-11-20)
+
+* **Feature**: With this release, customers can prioritize launching instances into ODCRs using targets from ASGs or Launch Templates. Customers can express their baseline instances' CPU-performance in attribute-based Instance Requirements configuration by referencing an instance family that meets their needs.
+
+# v1.49.0 (2024-11-18)
+
+* **Feature**: Amazon EC2 Auto Scaling now supports Amazon Application Recovery Controller (ARC) zonal shift and zonal autoshift to help you quickly recover an impaired application from failures in an Availability Zone (AZ).
+* **Dependency Update**: Update to smithy-go v1.22.1.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.48.0 (2024-11-07)
+
+* **Feature**: Auto Scaling groups now support the ability to strictly balance instances across Availability Zones by configuring the AvailabilityZoneDistribution parameter. If balanced-only is configured for a group, launches will always be attempted in the under scaled Availability Zone even if it is unhealthy.
+
+# v1.47.1 (2024-11-06)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.47.0 (2024-10-31)
+
+* **Feature**: Adds bake time for Auto Scaling group Instance Refresh
+
+# v1.46.1 (2024-10-28)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.46.0 (2024-10-21)
+
+* **Feature**: Adds support for removing the PlacementGroup setting on an Auto Scaling Group through the UpdateAutoScalingGroup API.
+
+# v1.45.2 (2024-10-08)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.45.1 (2024-10-07)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.45.0 (2024-10-04)
+
+* **Feature**: Add support for HTTP client metrics.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.44.4 (2024-10-03)
+
+* No change notes available for this release.
+
+# v1.44.3 (2024-09-27)
+
+* No change notes available for this release.
+
+# v1.44.2 (2024-09-25)
+
+* No change notes available for this release.
+
+# v1.44.1 (2024-09-23)
+
+* No change notes available for this release.
+
+# v1.44.0 (2024-09-20)
+
+* **Feature**: Add tracing and metrics support to service clients.
+* **Dependency Update**: Updated to the latest SDK module versions
+
+# v1.43.8 (2024-09-17)
+
+* **Bug Fix**: **BREAKFIX**: Only generate AccountIDEndpointMode config for services that use it. This is a compiler break, but removes no actual functionality, as no services currently use the account ID in endpoint resolution.
+
+# v1.43.7 (2024-09-04)
+
+* No change notes available for this release.
+
+# v1.43.6 (2024-09-03)
+
+* **Dependency Update**: Updated to the latest SDK module versions
+
 # v1.43.5 (2024-08-22)
 
 * **Documentation**: Amazon EC2 Auto Scaling now provides EBS health check to manage EC2 instance replacement

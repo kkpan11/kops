@@ -19,6 +19,7 @@ package etcdmanager
 import (
 	"fmt"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"k8s.io/kops/pkg/assets"
@@ -53,7 +54,7 @@ func Test_RunEtcdManagerBuilder(t *testing.T) {
 
 			builder := EtcdManagerBuilder{
 				KopsModelContext: kopsModelContext,
-				AssetBuilder:     assets.NewAssetBuilder(vfs.Context, kopsModelContext.Cluster.Spec.Assets, kopsModelContext.Cluster.Spec.KubernetesVersion, false),
+				AssetBuilder:     assets.NewAssetBuilder(vfs.Context, kopsModelContext.Cluster.Spec.Assets, false),
 			}
 
 			if err := builder.Build(context); err != nil {
@@ -81,9 +82,106 @@ func LoadKopsModelContext(basedir string) (*model.KopsModelContext, error) {
 	}
 
 	kopsContext := &model.KopsModelContext{
-		IAMModelContext: iam.IAMModelContext{Cluster: spec.Cluster},
-		InstanceGroups:  spec.InstanceGroups,
+		IAMModelContext:   iam.IAMModelContext{Cluster: spec.Cluster},
+		AllInstanceGroups: spec.InstanceGroups,
+		InstanceGroups:    spec.InstanceGroups,
 	}
 
 	return kopsContext, nil
+}
+
+func Test_resolveAzureBackupStore(t *testing.T) {
+	tests := []struct {
+		name            string
+		configStoreBase string
+		backupStore     string
+		wantURL         string
+		wantAccount     string
+		wantErr         bool
+	}{
+		{
+			name:            "non-azure backup store passes through",
+			configStoreBase: "memfs://tests/cluster",
+			backupStore:     "memfs://tests/cluster/backups/etcd/main",
+			wantURL:         "memfs://tests/cluster/backups/etcd/main",
+			wantAccount:     "",
+		},
+		{
+			name:            "non-azure backup store with azure config base passes through",
+			configStoreBase: "azureblob://kopsstate/state/cluster",
+			backupStore:     "s3://my-bucket/cluster/backups/etcd/main",
+			wantURL:         "s3://my-bucket/cluster/backups/etcd/main",
+			wantAccount:     "",
+		},
+		{
+			name:            "azureblob with multi-segment key",
+			configStoreBase: "azureblob://kopsstate/state/cluster",
+			backupStore:     "azureblob://kopsstate/state/cluster.example.com/backups/etcd/main",
+			wantURL:         "azureblob://state/cluster.example.com/backups/etcd/main",
+			wantAccount:     "kopsstate",
+		},
+		{
+			name:            "azureblob with empty key",
+			configStoreBase: "azureblob://kopsstate/state",
+			backupStore:     "azureblob://kopsstate/state",
+			wantURL:         "azureblob://state",
+			wantAccount:     "kopsstate",
+		},
+		{
+			name:            "account taken from configStore.base, not backup store",
+			configStoreBase: "azureblob://canonicalacct/state/cluster",
+			backupStore:     "azureblob://canonicalacct/backups/etcd/main",
+			wantURL:         "azureblob://backups/etcd/main",
+			wantAccount:     "canonicalacct",
+		},
+		{
+			name:            "azureblob backup store with non-azure configStore.base is rejected",
+			configStoreBase: "s3://my-bucket/state",
+			backupStore:     "azureblob://kopsstate/state/cluster/backups/etcd/main",
+			wantErr:         true,
+		},
+		{
+			name:            "azureblob missing container is rejected",
+			configStoreBase: "azureblob://kopsstate/state",
+			backupStore:     "azureblob://kopsstate",
+			wantErr:         true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			gotURL, gotAccount, err := resolveAzureBackupStore(tc.configStoreBase, tc.backupStore)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got URL=%q account=%q", gotURL, gotAccount)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if gotURL != tc.wantURL {
+				t.Errorf("URL: got %q, want %q", gotURL, tc.wantURL)
+			}
+			if gotAccount != tc.wantAccount {
+				t.Errorf("Account: got %q, want %q", gotAccount, tc.wantAccount)
+			}
+		})
+	}
+}
+
+func TestLinodeVolumeSelectors(t *testing.T) {
+	volumeTags, volumeNameTag := linodeVolumeSelectors("example.k8s.local", "main", "control-plane.example.k8s.local")
+
+	wantVolumeTags := []string{
+		"kops.k8s.io/cluster:example-k8s-local",
+		"kops.k8s.io/volume-role:main",
+	}
+	if !reflect.DeepEqual(volumeTags, wantVolumeTags) {
+		t.Fatalf("unexpected volume tags: got %v, want %v", volumeTags, wantVolumeTags)
+	}
+
+	if want := "kops.k8s.io/instance-group:control-plane-example-k8s-local"; volumeNameTag != want {
+		t.Fatalf("unexpected volume name tag: got %q, want %q", volumeNameTag, want)
+	}
 }

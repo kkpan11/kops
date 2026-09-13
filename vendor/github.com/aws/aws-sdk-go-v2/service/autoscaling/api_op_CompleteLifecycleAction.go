@@ -4,10 +4,7 @@ package autoscaling
 
 import (
 	"context"
-	"fmt"
-	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/smithy-go/middleware"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
 // Completes the lifecycle action for the specified token or instance with the
@@ -34,11 +31,12 @@ import (
 //   - If you need more time, record the lifecycle action heartbeat to keep the
 //     instance in a wait state.
 //
-//   - If you finish before the timeout period ends, send a callback by using the CompleteLifecycleAction
+//   - If you finish before the timeout period ends, send a callback by using the [CompleteLifecycleAction]
 //     API call.
 //
 // For more information, see [Complete a lifecycle action] in the Amazon EC2 Auto Scaling User Guide.
 //
+// [CompleteLifecycleAction]: https://docs.aws.amazon.com/autoscaling/ec2/APIReference/API_CompleteLifecycleAction.html
 // [Complete a lifecycle action]: https://docs.aws.amazon.com/autoscaling/ec2/userguide/completing-lifecycle-hooks.html
 func (c *Client) CompleteLifecycleAction(ctx context.Context, params *CompleteLifecycleActionInput, optFns ...func(*Options)) (*CompleteLifecycleActionOutput, error) {
 	if params == nil {
@@ -91,9 +89,6 @@ type CompleteLifecycleActionOutput struct {
 }
 
 func (c *Client) addOperationCompleteLifecycleActionMiddlewares(stack *middleware.Stack, options Options) (err error) {
-	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
-		return err
-	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpCompleteLifecycleAction{}, middleware.After)
 	if err != nil {
 		return err
@@ -102,19 +97,7 @@ func (c *Client) addOperationCompleteLifecycleActionMiddlewares(stack *middlewar
 	if err != nil {
 		return err
 	}
-	if err := addProtocolFinalizerMiddlewares(stack, options, "CompleteLifecycleAction"); err != nil {
-		return fmt.Errorf("add protocol finalizers: %v", err)
-	}
 
-	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
-		return err
-	}
-	if err = addSetLoggerMiddleware(stack, options); err != nil {
-		return err
-	}
-	if err = addClientRequestID(stack); err != nil {
-		return err
-	}
 	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
@@ -124,40 +107,13 @@ func (c *Client) addOperationCompleteLifecycleActionMiddlewares(stack *middlewar
 	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetry(stack, options); err != nil {
+	if err = addRecordResponseTiming(stack, options); err != nil {
 		return err
 	}
-	if err = addRawResponseToMetadata(stack); err != nil {
-		return err
-	}
-	if err = addRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack, options); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addTimeOffsetBuild(stack, c); err != nil {
-		return err
-	}
-	if err = addUserAgentRetryMode(stack, options); err != nil {
+	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
 	if err = addOpCompleteLifecycleActionValidationMiddleware(stack); err != nil {
-		return err
-	}
-	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opCompleteLifecycleAction(options.Region), middleware.Before); err != nil {
-		return err
-	}
-	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -172,13 +128,8 @@ func (c *Client) addOperationCompleteLifecycleActionMiddlewares(stack *middlewar
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
-	return nil
-}
-
-func newServiceMetadataMiddleware_opCompleteLifecycleAction(region string) *awsmiddleware.RegisterServiceMetadata {
-	return &awsmiddleware.RegisterServiceMetadata{
-		Region:        region,
-		ServiceID:     ServiceID,
-		OperationName: "CompleteLifecycleAction",
+	if err = addInterceptors(stack, options); err != nil {
+		return err
 	}
+	return nil
 }

@@ -22,7 +22,7 @@ import (
 	"os"
 
 	"k8s.io/klog/v2"
-	kopsapi "k8s.io/kops/pkg/apis/kops"
+	"k8s.io/kops/pkg/apis/kops/model"
 	"k8s.io/kops/pkg/assets"
 	"k8s.io/kops/util/pkg/architectures"
 	"k8s.io/kops/util/pkg/hashing"
@@ -34,20 +34,24 @@ import (
 // https://github.com/kubernetes/kubernetes/issues/30338
 
 const (
-	// CNI tarball for k8s >= 1.22
-	defaultCNIAssetAmd64K8s_22 = "https://storage.googleapis.com/k8s-artifacts-cni/release/v0.9.1/cni-plugins-linux-amd64-v0.9.1.tgz"
-	defaultCNIAssetArm64K8s_22 = "https://storage.googleapis.com/k8s-artifacts-cni/release/v0.9.1/cni-plugins-linux-arm64-v0.9.1.tgz"
+	defaultCNIAssetAmd64K8s_32 = "https://github.com/containernetworking/plugins/releases/download/v1.6.2/cni-plugins-linux-amd64-v1.6.2.tgz"
+	defaultCNIAssetArm64K8s_32 = "https://github.com/containernetworking/plugins/releases/download/v1.6.2/cni-plugins-linux-arm64-v1.6.2.tgz"
 
-	// CNI tarball for k8s >= 1.27
-	defaultCNIAssetAmd64K8s_27 = "https://storage.googleapis.com/k8s-artifacts-cni/release/v1.2.0/cni-plugins-linux-amd64-v1.2.0.tgz"
-	defaultCNIAssetArm64K8s_27 = "https://storage.googleapis.com/k8s-artifacts-cni/release/v1.2.0/cni-plugins-linux-arm64-v1.2.0.tgz"
+	defaultCNIAssetAmd64K8s_34 = "https://github.com/containernetworking/plugins/releases/download/v1.7.1/cni-plugins-linux-amd64-v1.7.1.tgz"
+	defaultCNIAssetArm64K8s_34 = "https://github.com/containernetworking/plugins/releases/download/v1.7.1/cni-plugins-linux-arm64-v1.7.1.tgz"
+
+	defaultCNIAssetAmd64K8s_35 = "https://github.com/containernetworking/plugins/releases/download/v1.8.0/cni-plugins-linux-amd64-v1.8.0.tgz"
+	defaultCNIAssetArm64K8s_35 = "https://github.com/containernetworking/plugins/releases/download/v1.8.0/cni-plugins-linux-arm64-v1.8.0.tgz"
+
+	defaultCNIAssetAmd64K8s_36 = "https://github.com/containernetworking/plugins/releases/download/v1.9.1/cni-plugins-linux-amd64-v1.9.1.tgz"
+	defaultCNIAssetArm64K8s_36 = "https://github.com/containernetworking/plugins/releases/download/v1.9.1/cni-plugins-linux-arm64-v1.9.1.tgz"
 
 	// Environment variable for overriding CNI url
 	ENV_VAR_CNI_ASSET_URL  = "CNI_VERSION_URL"
 	ENV_VAR_CNI_ASSET_HASH = "CNI_ASSET_HASH_STRING"
 )
 
-func FindCNIAssets(c *kopsapi.Cluster, assetBuilder *assets.AssetBuilder, arch architectures.Architecture) (*assets.FileAsset, error) {
+func FindCNIAssets(ig model.InstanceGroup, assetBuilder *assets.AssetBuilder, arch architectures.Architecture) (*assets.FileAsset, error) {
 	// Override CNI packages from env vars
 	cniAssetURL := os.Getenv(ENV_VAR_CNI_ASSET_URL)
 	cniAssetHash := os.Getenv(ENV_VAR_CNI_ASSET_HASH)
@@ -76,21 +80,35 @@ func FindCNIAssets(c *kopsapi.Cluster, assetBuilder *assets.AssetBuilder, arch a
 
 	switch arch {
 	case architectures.ArchitectureAmd64:
-		if c.IsKubernetesLT("1.27") {
-			cniAssetURL = defaultCNIAssetAmd64K8s_22
-		} else {
-			cniAssetURL = defaultCNIAssetAmd64K8s_27
+		switch {
+		case ig.KubernetesVersion().IsGTE("1.36"):
+			cniAssetURL = defaultCNIAssetAmd64K8s_36
+		case ig.KubernetesVersion().IsGTE("1.35"):
+			cniAssetURL = defaultCNIAssetAmd64K8s_35
+		case ig.KubernetesVersion().IsGTE("1.34"):
+			cniAssetURL = defaultCNIAssetAmd64K8s_34
+		case ig.KubernetesVersion().IsGTE("1.32"):
+			cniAssetURL = defaultCNIAssetAmd64K8s_32
 		}
-		klog.V(2).Infof("Adding default ARM64 CNI plugin binaries asset: %s", cniAssetURL)
 	case architectures.ArchitectureArm64:
-		if c.IsKubernetesLT("1.27") {
-			cniAssetURL = defaultCNIAssetArm64K8s_22
-		} else {
-			cniAssetURL = defaultCNIAssetArm64K8s_27
+		switch {
+		case ig.KubernetesVersion().IsGTE("1.36"):
+			cniAssetURL = defaultCNIAssetArm64K8s_36
+		case ig.KubernetesVersion().IsGTE("1.35"):
+			cniAssetURL = defaultCNIAssetArm64K8s_35
+		case ig.KubernetesVersion().IsGTE("1.34"):
+			cniAssetURL = defaultCNIAssetArm64K8s_34
+		case ig.KubernetesVersion().IsGTE("1.32"):
+			cniAssetURL = defaultCNIAssetArm64K8s_32
 		}
-		klog.V(2).Infof("Adding default AMD64 CNI plugin binaries asset: %s", cniAssetURL)
 	default:
 		return nil, fmt.Errorf("unknown arch for CNI plugin binaries asset: %s", arch)
+	}
+
+	if cniAssetURL == "" {
+		return nil, fmt.Errorf("unknown CNI plugin binaries asset: %s", arch)
+	} else {
+		klog.V(2).Infof("Adding CNI plugin binaries asset: %s", cniAssetURL)
 	}
 
 	u, err := url.Parse(cniAssetURL)

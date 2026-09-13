@@ -465,7 +465,7 @@ resource "aws_launch_template" "master-us-test-1a-masters-minimal-ipv6-example-c
     http_endpoint               = "enabled"
     http_protocol_ipv6          = "enabled"
     http_put_response_hop_limit = 1
-    http_tokens                 = "optional"
+    http_tokens                 = "required"
   }
   monitoring {
     enabled = false
@@ -494,6 +494,21 @@ resource "aws_launch_template" "master-us-test-1a-masters-minimal-ipv6-example-c
   }
   tag_specifications {
     resource_type = "volume"
+    tags = {
+      "KubernetesCluster"                                                                                     = "minimal-ipv6.example.com"
+      "Name"                                                                                                  = "master-us-test-1a.masters.minimal-ipv6.example.com"
+      "aws-node-termination-handler/managed"                                                                  = ""
+      "k8s.io/cluster-autoscaler/node-template/label/kops.k8s.io/kops-controller-pki"                         = ""
+      "k8s.io/cluster-autoscaler/node-template/label/node-role.kubernetes.io/control-plane"                   = ""
+      "k8s.io/cluster-autoscaler/node-template/label/node.kubernetes.io/exclude-from-external-load-balancers" = ""
+      "k8s.io/role/control-plane"                                                                             = "1"
+      "k8s.io/role/master"                                                                                    = "1"
+      "kops.k8s.io/instancegroup"                                                                             = "master-us-test-1a"
+      "kubernetes.io/cluster/minimal-ipv6.example.com"                                                        = "owned"
+    }
+  }
+  tag_specifications {
+    resource_type = "network-interface"
     tags = {
       "KubernetesCluster"                                                                                     = "minimal-ipv6.example.com"
       "Name"                                                                                                  = "master-us-test-1a.masters.minimal-ipv6.example.com"
@@ -547,7 +562,7 @@ resource "aws_launch_template" "nodes-minimal-ipv6-example-com" {
     http_endpoint               = "enabled"
     http_protocol_ipv6          = "enabled"
     http_put_response_hop_limit = 1
-    http_tokens                 = "optional"
+    http_tokens                 = "required"
   }
   monitoring {
     enabled = false
@@ -573,6 +588,18 @@ resource "aws_launch_template" "nodes-minimal-ipv6-example-com" {
   }
   tag_specifications {
     resource_type = "volume"
+    tags = {
+      "KubernetesCluster"                                                          = "minimal-ipv6.example.com"
+      "Name"                                                                       = "nodes.minimal-ipv6.example.com"
+      "aws-node-termination-handler/managed"                                       = ""
+      "k8s.io/cluster-autoscaler/node-template/label/node-role.kubernetes.io/node" = ""
+      "k8s.io/role/node"                                                           = "1"
+      "kops.k8s.io/instancegroup"                                                  = "nodes"
+      "kubernetes.io/cluster/minimal-ipv6.example.com"                             = "owned"
+    }
+  }
+  tag_specifications {
+    resource_type = "network-interface"
     tags = {
       "KubernetesCluster"                                                          = "minimal-ipv6.example.com"
       "Name"                                                                       = "nodes.minimal-ipv6.example.com"
@@ -827,6 +854,14 @@ resource "aws_s3_object" "kops-version-txt" {
   server_side_encryption = "AES256"
 }
 
+resource "aws_s3_object" "manifests-channels-kops-channels" {
+  bucket                 = "testingBucket"
+  content                = file("${path.module}/data/aws_s3_object_manifests-channels-kops-channels_content")
+  key                    = "clusters.example.com/minimal-ipv6.example.com/manifests/channels/kops-channels.yaml"
+  provider               = aws.files
+  server_side_encryption = "AES256"
+}
+
 resource "aws_s3_object" "manifests-etcdmanager-events-master-us-test-1a" {
   bucket                 = "testingBucket"
   content                = file("${path.module}/data/aws_s3_object_manifests-etcdmanager-events-master-us-test-1a_content")
@@ -903,14 +938,6 @@ resource "aws_s3_object" "minimal-ipv6-example-com-addons-kubelet-api-rbac-addon
   bucket                 = "testingBucket"
   content                = file("${path.module}/data/aws_s3_object_minimal-ipv6.example.com-addons-kubelet-api.rbac.addons.k8s.io-k8s-1.9_content")
   key                    = "clusters.example.com/minimal-ipv6.example.com/addons/kubelet-api.rbac.addons.k8s.io/k8s-1.9.yaml"
-  provider               = aws.files
-  server_side_encryption = "AES256"
-}
-
-resource "aws_s3_object" "minimal-ipv6-example-com-addons-leader-migration-rbac-addons-k8s-io-k8s-1-23" {
-  bucket                 = "testingBucket"
-  content                = file("${path.module}/data/aws_s3_object_minimal-ipv6.example.com-addons-leader-migration.rbac.addons.k8s.io-k8s-1.23_content")
-  key                    = "clusters.example.com/minimal-ipv6.example.com/addons/leader-migration.rbac.addons.k8s.io/k8s-1.23.yaml"
   provider               = aws.files
   server_side_encryption = "AES256"
 }

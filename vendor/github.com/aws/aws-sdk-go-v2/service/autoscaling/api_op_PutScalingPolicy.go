@@ -4,11 +4,8 @@ package autoscaling
 
 import (
 	"context"
-	"fmt"
-	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/service/autoscaling/types"
 	"github.com/aws/smithy-go/middleware"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
 // Creates or updates a scaling policy for an Auto Scaling group. Scaling policies
@@ -22,12 +19,14 @@ import (
 // For more information about using predictive scaling, see [Predictive scaling for Amazon EC2 Auto Scaling] in the Amazon EC2
 // Auto Scaling User Guide.
 //
-// You can view the scaling policies for an Auto Scaling group using the DescribePolicies API
+// You can view the scaling policies for an Auto Scaling group using the [DescribePolicies] API
 // call. If you are no longer using a scaling policy, you can delete it by calling
-// the DeletePolicyAPI.
+// the [DeletePolicy]API.
 //
 // [Step and simple scaling policies]: https://docs.aws.amazon.com/autoscaling/ec2/userguide/as-scaling-simple-step.html
+// [DeletePolicy]: https://docs.aws.amazon.com/autoscaling/ec2/APIReference/API_DeletePolicy.html
 // [Target tracking scaling policies]: https://docs.aws.amazon.com/autoscaling/ec2/userguide/as-scaling-target-tracking.html
+// [DescribePolicies]: https://docs.aws.amazon.com/autoscaling/ec2/APIReference/API_DescribePolicies.html
 // [Predictive scaling for Amazon EC2 Auto Scaling]: https://docs.aws.amazon.com/autoscaling/ec2/userguide/ec2-auto-scaling-predictive-scaling.html
 func (c *Client) PutScalingPolicy(ctx context.Context, params *PutScalingPolicyInput, optFns ...func(*Options)) (*PutScalingPolicyOutput, error) {
 	if params == nil {
@@ -208,9 +207,6 @@ type PutScalingPolicyOutput struct {
 }
 
 func (c *Client) addOperationPutScalingPolicyMiddlewares(stack *middleware.Stack, options Options) (err error) {
-	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
-		return err
-	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpPutScalingPolicy{}, middleware.After)
 	if err != nil {
 		return err
@@ -219,19 +215,7 @@ func (c *Client) addOperationPutScalingPolicyMiddlewares(stack *middleware.Stack
 	if err != nil {
 		return err
 	}
-	if err := addProtocolFinalizerMiddlewares(stack, options, "PutScalingPolicy"); err != nil {
-		return fmt.Errorf("add protocol finalizers: %v", err)
-	}
 
-	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
-		return err
-	}
-	if err = addSetLoggerMiddleware(stack, options); err != nil {
-		return err
-	}
-	if err = addClientRequestID(stack); err != nil {
-		return err
-	}
 	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
@@ -241,40 +225,13 @@ func (c *Client) addOperationPutScalingPolicyMiddlewares(stack *middleware.Stack
 	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetry(stack, options); err != nil {
+	if err = addRecordResponseTiming(stack, options); err != nil {
 		return err
 	}
-	if err = addRawResponseToMetadata(stack); err != nil {
-		return err
-	}
-	if err = addRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack, options); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addTimeOffsetBuild(stack, c); err != nil {
-		return err
-	}
-	if err = addUserAgentRetryMode(stack, options); err != nil {
+	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
 	if err = addOpPutScalingPolicyValidationMiddleware(stack); err != nil {
-		return err
-	}
-	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opPutScalingPolicy(options.Region), middleware.Before); err != nil {
-		return err
-	}
-	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -289,13 +246,8 @@ func (c *Client) addOperationPutScalingPolicyMiddlewares(stack *middleware.Stack
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
-	return nil
-}
-
-func newServiceMetadataMiddleware_opPutScalingPolicy(region string) *awsmiddleware.RegisterServiceMetadata {
-	return &awsmiddleware.RegisterServiceMetadata{
-		Region:        region,
-		ServiceID:     ServiceID,
-		OperationName: "PutScalingPolicy",
+	if err = addInterceptors(stack, options); err != nil {
+		return err
 	}
+	return nil
 }

@@ -28,6 +28,7 @@ import (
 	"k8s.io/kops/pkg/apis/nodeup"
 	"k8s.io/kops/pkg/assets"
 	"k8s.io/kops/pkg/model/iam"
+	"k8s.io/kops/pkg/model/resources"
 	"k8s.io/kops/pkg/testutils/golden"
 	"k8s.io/kops/upup/pkg/fi"
 	"k8s.io/kops/upup/pkg/fi/fitasks"
@@ -36,17 +37,20 @@ import (
 )
 
 func Test_ProxyFunc(t *testing.T) {
-	b := &BootstrapScript{}
-	ps := &kops.EgressProxySpec{
+	cluster := &kops.Cluster{}
+	cluster.Spec.Networking.EgressProxy = &kops.EgressProxySpec{
 		HTTPProxy: kops.HTTPProxy{
 			Host: "example.com",
 			Port: 80,
 		},
 	}
 
-	script, err := b.createProxyEnv(ps)
+	nodeupScript := &resources.NodeUpScript{}
+	nodeupScript.WithProxyEnv(cluster)
+
+	script, err := nodeupScript.ProxyEnv()
 	if err != nil {
-		t.Fatalf("createProxyEnv failed: %v", err)
+		t.Fatalf("ProxyEnv failed: %v", err)
 	}
 	if script == "" {
 		t.Fatalf("script cannot be empty")
@@ -56,14 +60,14 @@ func Test_ProxyFunc(t *testing.T) {
 		t.Fatalf("script not setting http_proxy properly")
 	}
 
-	ps.ProxyExcludes = "www.google.com,www.kubernetes.io"
+	cluster.Spec.Networking.EgressProxy.ProxyExcludes = "www.google.com,www.kubernetes.io"
 
-	script, err = b.createProxyEnv(ps)
+	script, err = nodeupScript.ProxyEnv()
 	if err != nil {
-		t.Fatalf("createProxyEnv failed: %v", err)
+		t.Fatalf("ProxyEnv failed: %v", err)
 	}
 
-	if !strings.Contains(script, "no_proxy="+ps.ProxyExcludes) {
+	if !strings.Contains(script, "no_proxy="+cluster.Spec.Networking.EgressProxy.ProxyExcludes) {
 		t.Fatalf("script not setting no_proxy properly")
 	}
 }
@@ -142,7 +146,7 @@ func TestBootstrapUserData(t *testing.T) {
 		}
 
 		caTask := &fitasks.Keypair{
-			Name:    fi.PtrTo(fi.CertificateIDCA),
+			Name:    new(fi.CertificateIDCA),
 			Subject: "cn=kubernetes",
 			Type:    "ca",
 		}
@@ -151,13 +155,17 @@ func TestBootstrapUserData(t *testing.T) {
 			"apiserver-aggregator-ca",
 			"etcd-clients-ca",
 			"etcd-manager-ca-events",
+			"etcd-manager-ca-leases",
 			"etcd-manager-ca-main",
 			"etcd-peers-ca-events",
+			"etcd-peers-ca-leases",
 			"etcd-peers-ca-main",
+			"kubelet",
+			"kube-proxy",
 			"service-account",
 		} {
 			task := &fitasks.Keypair{
-				Name:    fi.PtrTo(keypair),
+				Name:    new(keypair),
 				Subject: "cn=" + keypair,
 				Type:    "ca",
 			}
@@ -166,17 +174,18 @@ func TestBootstrapUserData(t *testing.T) {
 
 		bs := &BootstrapScriptBuilder{
 			KopsModelContext: &KopsModelContext{
-				IAMModelContext: iam.IAMModelContext{Cluster: cluster},
-				InstanceGroups:  []*kops.InstanceGroup{group},
+				IAMModelContext:   iam.IAMModelContext{Cluster: cluster},
+				AllInstanceGroups: []*kops.InstanceGroup{group},
+				InstanceGroups:    []*kops.InstanceGroup{group},
 			},
 			NodeUpConfigBuilder: &nodeupConfigBuilder{cluster: cluster},
 			NodeUpAssets: map[architectures.Architecture]*assets.MirroredAsset{
 				architectures.ArchitectureAmd64: {
-					Locations: []string{"nodeup-amd64-1", "nodeup-amd64-2"},
+					Locations: []string{"nodeup-amd64-1.xz", "nodeup-amd64-2.xz"},
 					Hash:      hashing.MustFromString("833723369ad345a88dd85d61b1e77336d56e61b864557ded71b92b6e34158e6a"),
 				},
 				architectures.ArchitectureArm64: {
-					Locations: []string{"nodeup-arm64-1", "nodeup-arm64-2"},
+					Locations: []string{"nodeup-arm64-1.xz", "nodeup-arm64-2.xz"},
 					Hash:      hashing.MustFromString("e525c28a65ff0ce4f95f9e730195b4e67fdcb15ceb1f36b5ad6921a8a4490c71"),
 				},
 			},
@@ -224,7 +233,7 @@ func makeTestCluster(hookSpecRoles []kops.InstanceGroupRole, fileAssetSpecRoles 
 					Members: []kops.EtcdMemberSpec{
 						{
 							Name:          "test",
-							InstanceGroup: fi.PtrTo("ig-1"),
+							InstanceGroup: new("ig-1"),
 						},
 					},
 					Version: "3.1.11",
@@ -234,7 +243,7 @@ func makeTestCluster(hookSpecRoles []kops.InstanceGroupRole, fileAssetSpecRoles 
 					Members: []kops.EtcdMemberSpec{
 						{
 							Name:          "test",
-							InstanceGroup: fi.PtrTo("ig-1"),
+							InstanceGroup: new("ig-1"),
 						},
 					},
 					Version: "3.1.11",
@@ -242,7 +251,7 @@ func makeTestCluster(hookSpecRoles []kops.InstanceGroupRole, fileAssetSpecRoles 
 				},
 			},
 			Containerd: &kops.ContainerdConfig{
-				LogLevel: fi.PtrTo("info"),
+				LogLevel: new("info"),
 			},
 			KubeAPIServer: &kops.KubeAPIServerConfig{
 				Image: "CoreOS",

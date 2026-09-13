@@ -6,14 +6,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2/types"
 	smithy "github.com/aws/smithy-go"
 	"github.com/aws/smithy-go/middleware"
 	smithytime "github.com/aws/smithy-go/time"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
 	smithywaiter "github.com/aws/smithy-go/waiter"
-	jmespath "github.com/jmespath/go-jmespath"
 	"time"
 )
 
@@ -61,9 +58,6 @@ type DescribeTargetHealthOutput struct {
 }
 
 func (c *Client) addOperationDescribeTargetHealthMiddlewares(stack *middleware.Stack, options Options) (err error) {
-	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
-		return err
-	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpDescribeTargetHealth{}, middleware.After)
 	if err != nil {
 		return err
@@ -72,19 +66,7 @@ func (c *Client) addOperationDescribeTargetHealthMiddlewares(stack *middleware.S
 	if err != nil {
 		return err
 	}
-	if err := addProtocolFinalizerMiddlewares(stack, options, "DescribeTargetHealth"); err != nil {
-		return fmt.Errorf("add protocol finalizers: %v", err)
-	}
 
-	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
-		return err
-	}
-	if err = addSetLoggerMiddleware(stack, options); err != nil {
-		return err
-	}
-	if err = addClientRequestID(stack); err != nil {
-		return err
-	}
 	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
@@ -94,40 +76,13 @@ func (c *Client) addOperationDescribeTargetHealthMiddlewares(stack *middleware.S
 	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetry(stack, options); err != nil {
+	if err = addRecordResponseTiming(stack, options); err != nil {
 		return err
 	}
-	if err = addRawResponseToMetadata(stack); err != nil {
-		return err
-	}
-	if err = addRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack, options); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addTimeOffsetBuild(stack, c); err != nil {
-		return err
-	}
-	if err = addUserAgentRetryMode(stack, options); err != nil {
+	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
 	if err = addOpDescribeTargetHealthValidationMiddleware(stack); err != nil {
-		return err
-	}
-	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opDescribeTargetHealth(options.Region), middleware.Before); err != nil {
-		return err
-	}
-	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -140,6 +95,9 @@ func (c *Client) addOperationDescribeTargetHealthMiddlewares(stack *middleware.S
 		return err
 	}
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
+	if err = addInterceptors(stack, options); err != nil {
 		return err
 	}
 	return nil
@@ -317,29 +275,23 @@ func targetDeregisteredStateRetryable(ctx context.Context, input *DescribeTarget
 	}
 
 	if err == nil {
-		pathValue, err := jmespath.Search("TargetHealthDescriptions[].TargetHealth.State", output)
-		if err != nil {
-			return false, fmt.Errorf("error evaluating waiter state: %w", err)
-		}
-
-		expectedValue := "unused"
-		var match = true
-		listOfValues, ok := pathValue.([]interface{})
-		if !ok {
-			return false, fmt.Errorf("waiter comparator expected list got %T", pathValue)
-		}
-
-		if len(listOfValues) == 0 {
-			match = false
-		}
-		for _, v := range listOfValues {
-			value, ok := v.(types.TargetHealthStateEnum)
-			if !ok {
-				return false, fmt.Errorf("waiter comparator expected types.TargetHealthStateEnum value, got %T", pathValue)
+		v1 := output.TargetHealthDescriptions
+		var v2 []types.TargetHealthStateEnum
+		for _, v := range v1 {
+			v3 := v.TargetHealth
+			var v4 types.TargetHealthStateEnum
+			if v3 != nil {
+				v5 := v3.State
+				v4 = v5
 			}
-
-			if string(value) != expectedValue {
+			v2 = append(v2, v4)
+		}
+		expectedValue := "unused"
+		match := len(v2) > 0
+		for _, v := range v2 {
+			if string(v) != expectedValue {
 				match = false
+				break
 			}
 		}
 
@@ -348,6 +300,9 @@ func targetDeregisteredStateRetryable(ctx context.Context, input *DescribeTarget
 		}
 	}
 
+	if err != nil {
+		return false, err
+	}
 	return true, nil
 }
 
@@ -511,29 +466,23 @@ func (w *TargetInServiceWaiter) WaitForOutput(ctx context.Context, params *Descr
 func targetInServiceStateRetryable(ctx context.Context, input *DescribeTargetHealthInput, output *DescribeTargetHealthOutput, err error) (bool, error) {
 
 	if err == nil {
-		pathValue, err := jmespath.Search("TargetHealthDescriptions[].TargetHealth.State", output)
-		if err != nil {
-			return false, fmt.Errorf("error evaluating waiter state: %w", err)
-		}
-
-		expectedValue := "healthy"
-		var match = true
-		listOfValues, ok := pathValue.([]interface{})
-		if !ok {
-			return false, fmt.Errorf("waiter comparator expected list got %T", pathValue)
-		}
-
-		if len(listOfValues) == 0 {
-			match = false
-		}
-		for _, v := range listOfValues {
-			value, ok := v.(types.TargetHealthStateEnum)
-			if !ok {
-				return false, fmt.Errorf("waiter comparator expected types.TargetHealthStateEnum value, got %T", pathValue)
+		v1 := output.TargetHealthDescriptions
+		var v2 []types.TargetHealthStateEnum
+		for _, v := range v1 {
+			v3 := v.TargetHealth
+			var v4 types.TargetHealthStateEnum
+			if v3 != nil {
+				v5 := v3.State
+				v4 = v5
 			}
-
-			if string(value) != expectedValue {
+			v2 = append(v2, v4)
+		}
+		expectedValue := "healthy"
+		match := len(v2) > 0
+		for _, v := range v2 {
+			if string(v) != expectedValue {
 				match = false
+				break
 			}
 		}
 
@@ -554,6 +503,9 @@ func targetInServiceStateRetryable(ctx context.Context, input *DescribeTargetHea
 		}
 	}
 
+	if err != nil {
+		return false, err
+	}
 	return true, nil
 }
 
@@ -564,11 +516,3 @@ type DescribeTargetHealthAPIClient interface {
 }
 
 var _ DescribeTargetHealthAPIClient = (*Client)(nil)
-
-func newServiceMetadataMiddleware_opDescribeTargetHealth(region string) *awsmiddleware.RegisterServiceMetadata {
-	return &awsmiddleware.RegisterServiceMetadata{
-		Region:        region,
-		ServiceID:     ServiceID,
-		OperationName: "DescribeTargetHealth",
-	}
-}

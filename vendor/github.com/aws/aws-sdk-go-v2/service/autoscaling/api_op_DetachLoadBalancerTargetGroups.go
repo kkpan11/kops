@@ -4,13 +4,10 @@ package autoscaling
 
 import (
 	"context"
-	"fmt"
-	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/smithy-go/middleware"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
-// This API operation is superseded by DetachTrafficSources, which can detach multiple traffic sources
+// This API operation is superseded by [DetachTrafficSources], which can detach multiple traffic sources
 // types. We recommend using DetachTrafficSources to simplify how you manage
 // traffic sources. However, we continue to support DetachLoadBalancerTargetGroups
 // . You can use both the original DetachLoadBalancerTargetGroups API operation
@@ -20,11 +17,16 @@ import (
 //
 // When you detach a target group, it enters the Removing state while
 // deregistering the instances in the group. When all instances are deregistered,
-// then you can no longer describe the target group using the DescribeLoadBalancerTargetGroupsAPI call. The
+// then you can no longer describe the target group using the [DescribeLoadBalancerTargetGroups]API call. The
 // instances remain running.
 //
-// You can use this operation to detach target groups that were attached by using AttachLoadBalancerTargetGroups
-// , but not for target groups that were attached by using AttachTrafficSources.
+// You can use this operation to detach target groups that were attached by using [AttachLoadBalancerTargetGroups]
+// , but not for target groups that were attached by using [AttachTrafficSources].
+//
+// [AttachLoadBalancerTargetGroups]: https://docs.aws.amazon.com/autoscaling/ec2/APIReference/API_AttachLoadBalancerTargetGroups.html
+// [DescribeLoadBalancerTargetGroups]: https://docs.aws.amazon.com/autoscaling/ec2/APIReference/API_DescribeLoadBalancerTargetGroups.html
+// [DetachTrafficSources]: https://docs.aws.amazon.com/autoscaling/ec2/APIReference/API_DetachTrafficSources.html
+// [AttachTrafficSources]: https://docs.aws.amazon.com/autoscaling/ec2/APIReference/API_AttachTrafficSources.html
 func (c *Client) DetachLoadBalancerTargetGroups(ctx context.Context, params *DetachLoadBalancerTargetGroupsInput, optFns ...func(*Options)) (*DetachLoadBalancerTargetGroupsOutput, error) {
 	if params == nil {
 		params = &DetachLoadBalancerTargetGroupsInput{}
@@ -64,9 +66,6 @@ type DetachLoadBalancerTargetGroupsOutput struct {
 }
 
 func (c *Client) addOperationDetachLoadBalancerTargetGroupsMiddlewares(stack *middleware.Stack, options Options) (err error) {
-	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
-		return err
-	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpDetachLoadBalancerTargetGroups{}, middleware.After)
 	if err != nil {
 		return err
@@ -75,19 +74,7 @@ func (c *Client) addOperationDetachLoadBalancerTargetGroupsMiddlewares(stack *mi
 	if err != nil {
 		return err
 	}
-	if err := addProtocolFinalizerMiddlewares(stack, options, "DetachLoadBalancerTargetGroups"); err != nil {
-		return fmt.Errorf("add protocol finalizers: %v", err)
-	}
 
-	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
-		return err
-	}
-	if err = addSetLoggerMiddleware(stack, options); err != nil {
-		return err
-	}
-	if err = addClientRequestID(stack); err != nil {
-		return err
-	}
 	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
@@ -97,40 +84,13 @@ func (c *Client) addOperationDetachLoadBalancerTargetGroupsMiddlewares(stack *mi
 	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetry(stack, options); err != nil {
+	if err = addRecordResponseTiming(stack, options); err != nil {
 		return err
 	}
-	if err = addRawResponseToMetadata(stack); err != nil {
-		return err
-	}
-	if err = addRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack, options); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addTimeOffsetBuild(stack, c); err != nil {
-		return err
-	}
-	if err = addUserAgentRetryMode(stack, options); err != nil {
+	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
 	if err = addOpDetachLoadBalancerTargetGroupsValidationMiddleware(stack); err != nil {
-		return err
-	}
-	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opDetachLoadBalancerTargetGroups(options.Region), middleware.Before); err != nil {
-		return err
-	}
-	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -145,13 +105,8 @@ func (c *Client) addOperationDetachLoadBalancerTargetGroupsMiddlewares(stack *mi
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
-	return nil
-}
-
-func newServiceMetadataMiddleware_opDetachLoadBalancerTargetGroups(region string) *awsmiddleware.RegisterServiceMetadata {
-	return &awsmiddleware.RegisterServiceMetadata{
-		Region:        region,
-		ServiceID:     ServiceID,
-		OperationName: "DetachLoadBalancerTargetGroups",
+	if err = addInterceptors(stack, options); err != nil {
+		return err
 	}
+	return nil
 }

@@ -142,13 +142,15 @@ type ConnectionState string
 
 // Enum values for ConnectionState
 const (
-	ConnectionStateCreating      ConnectionState = "CREATING"
-	ConnectionStateUpdating      ConnectionState = "UPDATING"
-	ConnectionStateDeleting      ConnectionState = "DELETING"
-	ConnectionStateAuthorized    ConnectionState = "AUTHORIZED"
-	ConnectionStateDeauthorized  ConnectionState = "DEAUTHORIZED"
-	ConnectionStateAuthorizing   ConnectionState = "AUTHORIZING"
-	ConnectionStateDeauthorizing ConnectionState = "DEAUTHORIZING"
+	ConnectionStateCreating           ConnectionState = "CREATING"
+	ConnectionStateUpdating           ConnectionState = "UPDATING"
+	ConnectionStateDeleting           ConnectionState = "DELETING"
+	ConnectionStateAuthorized         ConnectionState = "AUTHORIZED"
+	ConnectionStateDeauthorized       ConnectionState = "DEAUTHORIZED"
+	ConnectionStateAuthorizing        ConnectionState = "AUTHORIZING"
+	ConnectionStateDeauthorizing      ConnectionState = "DEAUTHORIZING"
+	ConnectionStateActive             ConnectionState = "ACTIVE"
+	ConnectionStateFailedConnectivity ConnectionState = "FAILED_CONNECTIVITY"
 )
 
 // Values returns all known values for ConnectionState. Note that this can be
@@ -164,6 +166,8 @@ func (ConnectionState) Values() []ConnectionState {
 		"DEAUTHORIZED",
 		"AUTHORIZING",
 		"DEAUTHORIZING",
+		"ACTIVE",
+		"FAILED_CONNECTIVITY",
 	}
 }
 
@@ -217,6 +221,25 @@ func (EventSourceState) Values() []EventSourceState {
 	}
 }
 
+type IncludeDetail string
+
+// Enum values for IncludeDetail
+const (
+	IncludeDetailNone IncludeDetail = "NONE"
+	IncludeDetailFull IncludeDetail = "FULL"
+)
+
+// Values returns all known values for IncludeDetail. Note that this can be
+// expanded in the future, and so it is only as up to date as the client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
+func (IncludeDetail) Values() []IncludeDetail {
+	return []IncludeDetail{
+		"NONE",
+		"FULL",
+	}
+}
+
 type LaunchType string
 
 // Enum values for LaunchType
@@ -235,6 +258,29 @@ func (LaunchType) Values() []LaunchType {
 		"EC2",
 		"FARGATE",
 		"EXTERNAL",
+	}
+}
+
+type Level string
+
+// Enum values for Level
+const (
+	LevelOff   Level = "OFF"
+	LevelError Level = "ERROR"
+	LevelInfo  Level = "INFO"
+	LevelTrace Level = "TRACE"
+)
+
+// Values returns all known values for Level. Note that this can be expanded in
+// the future, and so it is only as up to date as the client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
+func (Level) Values() []Level {
+	return []Level{
+		"OFF",
+		"ERROR",
+		"INFO",
+		"TRACE",
 	}
 }
 

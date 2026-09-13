@@ -22,12 +22,6 @@ import (
 	"k8s.io/kops"
 )
 
-const (
-	// defaultKopsMirrorBase will be detected and automatically set to pull from the defaultKopsMirrors
-	kopsDefaultBase      = "https://artifacts.k8s.io/binaries/kops/%s/"
-	githubKopsMirrorBase = "https://github.com/kubernetes/kops/releases/download/v%s/"
-)
-
 type mirrorConfig struct {
 	Base    string
 	Mirrors []string
@@ -38,13 +32,6 @@ var wellKnownMirrors = []mirrorConfig{
 		Base: "https://artifacts.k8s.io/binaries/kops/{kopsVersion}/",
 		Mirrors: []string{
 			"https://github.com/kubernetes/kops/releases/download/v{kopsVersion}/",
-		},
-	},
-	{
-		Base: "https://dl.k8s.io/release/",
-		Mirrors: []string{
-			// We include this mirror in case dl.k8s.io is not directly reachable.
-			"https://cdn.dl.k8s.io/release/",
 		},
 	},
 }
@@ -65,19 +52,16 @@ func (m *mirrorConfig) findMirrors(u string) ([]string, bool) {
 	mirrors := []string{u}
 
 	for _, mirror := range m.Mirrors {
-		mirror = strings.ReplaceAll(mirror, "{kopsVersion}", kops.Version)
 		suffix := strings.TrimPrefix(u, baseURLString)
 
-		if strings.HasPrefix(mirror, "https://github.com") {
+		if strings.HasPrefix(mirror, "https://github.com") && strings.Contains(mirror, "/kops/") {
+			mirror = strings.ReplaceAll(mirror, "{kopsVersion}", kops.Version)
 			// GitHub artifact names are quite different, because the suffix path is collapsed.
 			suffix = strings.ReplaceAll(suffix, "/", "-")
 			suffix = strings.ReplaceAll(suffix, "linux-amd64-nodeup", "nodeup-linux-amd64")
 			suffix = strings.ReplaceAll(suffix, "linux-arm64-nodeup", "nodeup-linux-arm64")
-			suffix = strings.ReplaceAll(suffix, "linux-amd64-protokube", "protokube-linux-amd64")
-			suffix = strings.ReplaceAll(suffix, "linux-arm64-protokube", "protokube-linux-arm64")
-			suffix = strings.ReplaceAll(suffix, "linux-amd64-channels", "channels-linux-amd64")
-			suffix = strings.ReplaceAll(suffix, "linux-arm64-channels", "channels-linux-arm64")
 		}
+
 		mirrors = append(mirrors, mirror+suffix)
 	}
 	return mirrors, true

@@ -14,20 +14,26 @@ The following table provides the support status for various networking providers
 
 As of kOps 1.26 the default network provider is Cilium. Prior to that the default is Kubenet.
 
+| Network provider | Experimental | Stable | Deprecated |
+|------------------|-------------:|-------:|-----------:|
+| AWS VPC          |          1.9 |   1.21 |          - |
+| Calico           |          1.6 |   1.11 |          - |
+| Cilium (default) |          1.9 |   1.15 |          - |
+| Cilium ENI       |         1.18 |   1.26 |          - |
+| Flannel UDP      |        1.5.2 |      - |          - |
+| Flannel VXLAN    |        1.8.0 |      - |          - |
+| Kindnet          |         1.32 |      - |          - |
+| Kube-router      |        1.6.2 |      - |          - |
+| Kubenet          |          1.5 |    1.5 |          - |
+
+The following providers are no longer supported and can no longer be used:
+
 | Network provider | Experimental | Stable | Deprecated |         Removed |
 |------------------|-------------:|-------:|-----------:|----------------:|
-| AWS VPC          |          1.9 |   1.21 |          - |               - |
-| Calico           |          1.6 |   1.11 |          - |               - |
 | Canal            |         1.12 |      - |       1.27 | Kubernetes 1.28 |
-| Cilium           |          1.9 |   1.15 |          - |               - |
-| Cilium ENI       |         1.18 |   1.26 |          - |               - |
-| Flannel udp      |        1.5.2 |      - |       1.27 | Kubernetes 1.28 |
-| Flannel vxlan    |        1.8.0 |      - |       1.27 | Kubernetes 1.28 |
-| Kopeio           |          1.5 |      - |          - |               - |
-| Kube-router      |        1.6.2 |      - |       1.27 | Kubernetes 1.28 |
-| Kubenet          |          1.5 |    1.5 |          - |               - |
-| Lyft VPC         |         1.11 |      - |       1.22 |            1.23 |
-| Romana           |          1.8 |      - |       1.18 |            1.19 |
+| Kopeio           |          1.5 |      - |       1.37 |       kOps 1.37 |
+| Lyft VPC         |         1.11 |      - |       1.22 |       kOps 1.23 |
+| Romana           |          1.8 |      - |       1.18 |       kOps 1.19 |
 | Weave            |          1.5 |      - |       1.23 | Kubernetes 1.23 |
 
 ### Specifying network option for cluster creation
@@ -66,9 +72,9 @@ Several CNI providers are currently built into kOps:
 
 * [AWS VPC](networking/aws-vpc.md)
 * [Calico](networking/calico.md)
-* [Canal](networking/canal.md)
 * [Cilium](networking/cilium.md)
 * [Flannel](networking/flannel.md)
+* [Kindnet](networking/kindnet.md)
 * [Kube-router](networking/kube-router.md)
 
 kOps makes it easy for cluster operators to choose one of these options. The manifests for the providers

@@ -4,10 +4,7 @@ package autoscaling
 
 import (
 	"context"
-	"fmt"
-	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/smithy-go/middleware"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
 // Suspends the specified auto scaling processes, or all processes, for the
@@ -17,8 +14,9 @@ import (
 // other process types from functioning properly. For more information, see [Suspend and resume Amazon EC2 Auto Scaling processes]in the
 // Amazon EC2 Auto Scaling User Guide.
 //
-// To resume processes that have been suspended, call the ResumeProcesses API.
+// To resume processes that have been suspended, call the [ResumeProcesses] API.
 //
+// [ResumeProcesses]: https://docs.aws.amazon.com/autoscaling/ec2/APIReference/API_ResumeProcesses.html
 // [Suspend and resume Amazon EC2 Auto Scaling processes]: https://docs.aws.amazon.com/autoscaling/ec2/userguide/as-suspend-resume-processes.html
 func (c *Client) SuspendProcesses(ctx context.Context, params *SuspendProcessesInput, optFns ...func(*Options)) (*SuspendProcessesOutput, error) {
 	if params == nil {
@@ -76,9 +74,6 @@ type SuspendProcessesOutput struct {
 }
 
 func (c *Client) addOperationSuspendProcessesMiddlewares(stack *middleware.Stack, options Options) (err error) {
-	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
-		return err
-	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpSuspendProcesses{}, middleware.After)
 	if err != nil {
 		return err
@@ -87,19 +82,7 @@ func (c *Client) addOperationSuspendProcessesMiddlewares(stack *middleware.Stack
 	if err != nil {
 		return err
 	}
-	if err := addProtocolFinalizerMiddlewares(stack, options, "SuspendProcesses"); err != nil {
-		return fmt.Errorf("add protocol finalizers: %v", err)
-	}
 
-	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
-		return err
-	}
-	if err = addSetLoggerMiddleware(stack, options); err != nil {
-		return err
-	}
-	if err = addClientRequestID(stack); err != nil {
-		return err
-	}
 	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
@@ -109,40 +92,13 @@ func (c *Client) addOperationSuspendProcessesMiddlewares(stack *middleware.Stack
 	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetry(stack, options); err != nil {
+	if err = addRecordResponseTiming(stack, options); err != nil {
 		return err
 	}
-	if err = addRawResponseToMetadata(stack); err != nil {
-		return err
-	}
-	if err = addRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack, options); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addTimeOffsetBuild(stack, c); err != nil {
-		return err
-	}
-	if err = addUserAgentRetryMode(stack, options); err != nil {
+	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
 	if err = addOpSuspendProcessesValidationMiddleware(stack); err != nil {
-		return err
-	}
-	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opSuspendProcesses(options.Region), middleware.Before); err != nil {
-		return err
-	}
-	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -157,13 +113,8 @@ func (c *Client) addOperationSuspendProcessesMiddlewares(stack *middleware.Stack
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
-	return nil
-}
-
-func newServiceMetadataMiddleware_opSuspendProcesses(region string) *awsmiddleware.RegisterServiceMetadata {
-	return &awsmiddleware.RegisterServiceMetadata{
-		Region:        region,
-		ServiceID:     ServiceID,
-		OperationName: "SuspendProcesses",
+	if err = addInterceptors(stack, options); err != nil {
+		return err
 	}
+	return nil
 }

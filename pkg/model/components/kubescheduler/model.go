@@ -29,16 +29,11 @@ import (
 	"k8s.io/kops/pkg/assets"
 	"k8s.io/kops/pkg/kubemanifest"
 	"k8s.io/kops/pkg/model"
+	"k8s.io/kops/pkg/wellknownpaths"
 	"k8s.io/kops/upup/pkg/fi"
 	"k8s.io/kops/util/pkg/reflectutils"
 	"sigs.k8s.io/yaml"
 )
-
-// KubeSchedulerConfigPath is the path where we write the kube-scheduler config file (on the control-plane nodes)
-const KubeSchedulerConfigPath = "/var/lib/kube-scheduler/config.yaml"
-
-// Kubeconfig is the path where we write the kube-scheduler kubeconfig file (on the control-plane nodes)
-const KubeConfigPath = "/var/lib/kube-scheduler/kubeconfig"
 
 // KubeSchedulerBuilder builds the configuration file for kube-scheduler
 type KubeSchedulerBuilder struct {
@@ -56,8 +51,8 @@ func (b *KubeSchedulerBuilder) Build(c *fi.CloudupModelBuilderContext) error {
 		return err
 	}
 
-	b.AssetBuilder.StaticFiles = append(b.AssetBuilder.StaticFiles, &assets.StaticFile{
-		Path:    KubeSchedulerConfigPath,
+	b.AssetBuilder.AddStaticFile(&assets.StaticFile{
+		Path:    wellknownpaths.KubeSchedulerConfig,
 		Content: string(configYAML),
 		Roles:   []kops.InstanceGroupRole{kops.InstanceGroupRoleControlPlane, kops.InstanceGroupRoleAPIServer},
 	})
@@ -88,16 +83,13 @@ func (b *KubeSchedulerBuilder) buildSchedulerConfig() ([]byte, error) {
 		config = &unstructured.Unstructured{}
 		config.SetKind("KubeSchedulerConfiguration")
 		config.SetAPIVersion("kubescheduler.config.k8s.io/v1")
-		if b.IsKubernetesLT("1.25") {
-			config.SetAPIVersion("kubescheduler.config.k8s.io/v1beta2")
-		}
 		// We need to store the object, because we are often called repeatedly (until we converge)
 		b.AdditionalObjects = append(b.AdditionalObjects, kubemanifest.NewObject(config.Object))
 	}
 
 	// TODO: Handle different versions? e.g. gvk := config.GroupVersionKind()
 
-	if err := unstructured.SetNestedField(config.Object, KubeConfigPath, "clientConnection", "kubeconfig"); err != nil {
+	if err := unstructured.SetNestedField(config.Object, wellknownpaths.KubeSchedulerKubeConfig, "clientConnection", "kubeconfig"); err != nil {
 		return nil, fmt.Errorf("error setting clientConnection.kubeconfig in kube-scheduler configuration: %w", err)
 	}
 
@@ -184,7 +176,7 @@ func MapToUnstructured(options interface{}, target *unstructured.Unstructured) e
 					return err
 				}
 				// Clear the field, so we don't set the flag
-				val.Set(reflect.ValueOf(nil))
+				val.Set(reflect.Zero(val.Type()))
 			default:
 				if err := setValue(targetPath, val.Interface()); err != nil {
 					return err

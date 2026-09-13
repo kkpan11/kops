@@ -4,20 +4,13 @@ package elasticloadbalancingv2
 
 import (
 	"context"
-	"fmt"
-	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2/types"
 	"github.com/aws/smithy-go/middleware"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
 // Enables the Availability Zones for the specified public subnets for the
 // specified Application Load Balancer, Network Load Balancer or Gateway Load
 // Balancer. The specified subnets replace the previously enabled subnets.
-//
-// When you specify subnets for a Network Load Balancer, or Gateway Load Balancer
-// you must include all subnets that were enabled previously, with their existing
-// configurations, plus any additional subnets.
 func (c *Client) SetSubnets(ctx context.Context, params *SetSubnetsInput, optFns ...func(*Options)) (*SetSubnetsOutput, error) {
 	if params == nil {
 		params = &SetSubnetsInput{}
@@ -40,26 +33,26 @@ type SetSubnetsInput struct {
 	// This member is required.
 	LoadBalancerArn *string
 
-	// [Application Load Balancers] The IP address type. The possible values are ipv4
-	// (for only IPv4 addresses), dualstack (for IPv4 and IPv6 addresses), and
-	// dualstack-without-public-ipv4 (for IPv6 only public addresses, with private IPv4
-	// and IPv6 addresses).
+	// [Network Load Balancers with UDP listeners] Indicates whether to use an IPv6
+	// prefix from each subnet for source NAT. The IP address type must be dualstack .
+	// The default value is off .
+	EnablePrefixForIpv6SourceNat types.EnablePrefixForIpv6SourceNatEnum
+
+	// The IP address type.
 	//
-	// [Network Load Balancers] The type of IP addresses used by the subnets for your
-	// load balancer. The possible values are ipv4 (for IPv4 addresses) and dualstack
-	// (for IPv4 and IPv6 addresses). You can’t specify dualstack for a load balancer
-	// with a UDP or TCP_UDP listener.
+	// [Application Load Balancers] The possible values are ipv4 (IPv4 addresses),
+	// dualstack (IPv4 and IPv6 addresses), and dualstack-without-public-ipv4 (public
+	// IPv6 addresses and private IPv4 and IPv6 addresses).
 	//
-	// [Gateway Load Balancers] The type of IP addresses used by the subnets for your
-	// load balancer. The possible values are ipv4 (for IPv4 addresses) and dualstack
-	// (for IPv4 and IPv6 addresses).
+	// [Network Load Balancers and Gateway Load Balancers] The possible values are ipv4
+	// (IPv4 addresses) and dualstack (IPv4 and IPv6 addresses).
 	IpAddressType types.IpAddressType
 
 	// The IDs of the public subnets. You can specify only one subnet per Availability
 	// Zone. You must specify either subnets or subnet mappings.
 	//
 	// [Application Load Balancers] You must specify subnets from at least two
-	// Availability Zones. You cannot specify Elastic IP addresses for your subnets.
+	// Availability Zones. You can't specify Elastic IP addresses for your subnets.
 	//
 	// [Application Load Balancers on Outposts] You must specify one Outpost subnet.
 	//
@@ -92,7 +85,8 @@ type SetSubnetsInput struct {
 	// Zones.
 	//
 	// [Gateway Load Balancers] You can specify subnets from one or more Availability
-	// Zones.
+	// Zones. You must include all subnets that were enabled previously, with their
+	// existing configurations, plus any additional subnets.
 	Subnets []string
 
 	noSmithyDocumentSerde
@@ -103,11 +97,11 @@ type SetSubnetsOutput struct {
 	// Information about the subnets.
 	AvailabilityZones []types.AvailabilityZone
 
-	// [Application Load Balancers] The IP address type.
-	//
-	// [Network Load Balancers] The IP address type.
-	//
-	// [Gateway Load Balancers] The IP address type.
+	// [Network Load Balancers] Indicates whether to use an IPv6 prefix from each
+	// subnet for source NAT.
+	EnablePrefixForIpv6SourceNat types.EnablePrefixForIpv6SourceNatEnum
+
+	// The IP address type.
 	IpAddressType types.IpAddressType
 
 	// Metadata pertaining to the operation's result.
@@ -117,9 +111,6 @@ type SetSubnetsOutput struct {
 }
 
 func (c *Client) addOperationSetSubnetsMiddlewares(stack *middleware.Stack, options Options) (err error) {
-	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
-		return err
-	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpSetSubnets{}, middleware.After)
 	if err != nil {
 		return err
@@ -128,19 +119,7 @@ func (c *Client) addOperationSetSubnetsMiddlewares(stack *middleware.Stack, opti
 	if err != nil {
 		return err
 	}
-	if err := addProtocolFinalizerMiddlewares(stack, options, "SetSubnets"); err != nil {
-		return fmt.Errorf("add protocol finalizers: %v", err)
-	}
 
-	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
-		return err
-	}
-	if err = addSetLoggerMiddleware(stack, options); err != nil {
-		return err
-	}
-	if err = addClientRequestID(stack); err != nil {
-		return err
-	}
 	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
@@ -150,40 +129,13 @@ func (c *Client) addOperationSetSubnetsMiddlewares(stack *middleware.Stack, opti
 	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetry(stack, options); err != nil {
+	if err = addRecordResponseTiming(stack, options); err != nil {
 		return err
 	}
-	if err = addRawResponseToMetadata(stack); err != nil {
-		return err
-	}
-	if err = addRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack, options); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addTimeOffsetBuild(stack, c); err != nil {
-		return err
-	}
-	if err = addUserAgentRetryMode(stack, options); err != nil {
+	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
 	if err = addOpSetSubnetsValidationMiddleware(stack); err != nil {
-		return err
-	}
-	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opSetSubnets(options.Region), middleware.Before); err != nil {
-		return err
-	}
-	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -198,13 +150,8 @@ func (c *Client) addOperationSetSubnetsMiddlewares(stack *middleware.Stack, opti
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
-	return nil
-}
-
-func newServiceMetadataMiddleware_opSetSubnets(region string) *awsmiddleware.RegisterServiceMetadata {
-	return &awsmiddleware.RegisterServiceMetadata{
-		Region:        region,
-		ServiceID:     ServiceID,
-		OperationName: "SetSubnets",
+	if err = addInterceptors(stack, options); err != nil {
+		return err
 	}
+	return nil
 }

@@ -24,7 +24,6 @@ import (
 // OIDCProviderBuilder configures IAM OIDC Provider
 type OIDCProviderBuilder struct {
 	*AWSModelContext
-	KeyStore  fi.Keystore
 	Lifecycle fi.Lifecycle
 }
 
@@ -48,7 +47,7 @@ func (b *OIDCProviderBuilder) Build(c *fi.CloudupModelBuilderContext) error {
 	}
 
 	c.AddTask(&awstasks.IAMOIDCProvider{
-		Name:        fi.PtrTo(b.ClusterName()),
+		Name:        new(b.ClusterName()),
 		Lifecycle:   b.Lifecycle,
 		URL:         b.Cluster.Spec.KubeAPIServer.ServiceAccountIssuer,
 		ClientIDs:   audiences,

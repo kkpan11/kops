@@ -35,7 +35,7 @@ const (
 )
 
 func buildMinimalCluster() *kops.Cluster {
-	return testutils.BuildMinimalCluster("testcluster.test.com")
+	return testutils.BuildMinimalClusterAWS("testcluster.test.com")
 }
 
 func buildNodeInstanceGroup(subnets ...string) *kops.InstanceGroup {
@@ -54,7 +54,7 @@ func TestRootVolumeOptimizationFlag(t *testing.T) {
 	if ig.Spec.RootVolume == nil {
 		ig.Spec.RootVolume = &kops.InstanceRootVolumeSpec{}
 	}
-	ig.Spec.RootVolume.Optimization = fi.PtrTo(true)
+	ig.Spec.RootVolume.Optimization = new(true)
 
 	k := [][]byte{}
 	k = append(k, []byte(sshPublicKeyEntry))
@@ -65,9 +65,10 @@ func TestRootVolumeOptimizationFlag(t *testing.T) {
 	b := AutoscalingGroupModelBuilder{
 		AWSModelContext: &AWSModelContext{
 			KopsModelContext: &model.KopsModelContext{
-				IAMModelContext: iam.IAMModelContext{Cluster: cluster},
-				SSHPublicKeys:   k,
-				InstanceGroups:  igs,
+				IAMModelContext:   iam.IAMModelContext{Cluster: cluster},
+				SSHPublicKeys:     k,
+				AllInstanceGroups: igs,
+				InstanceGroups:    igs,
 			},
 		},
 		BootstrapScriptBuilder: &model.BootstrapScriptBuilder{
@@ -95,7 +96,7 @@ func TestRootVolumeOptimizationFlag(t *testing.T) {
 
 	// We need the CA for the bootstrap script
 	caTask := &fitasks.Keypair{
-		Name:    fi.PtrTo(fi.CertificateIDCA),
+		Name:    new(fi.CertificateIDCA),
 		Subject: "cn=kubernetes",
 		Type:    "ca",
 	}
@@ -104,7 +105,7 @@ func TestRootVolumeOptimizationFlag(t *testing.T) {
 		"etcd-clients-ca",
 	} {
 		task := &fitasks.Keypair{
-			Name:    fi.PtrTo(keypair),
+			Name:    new(keypair),
 			Subject: "cn=" + keypair,
 			Type:    "ca",
 		}
@@ -177,15 +178,17 @@ func TestAPIServerAdditionalSecurityGroupsWithNLB(t *testing.T) {
 	b := AutoscalingGroupModelBuilder{
 		AWSModelContext: &AWSModelContext{
 			KopsModelContext: &model.KopsModelContext{
-				IAMModelContext: iam.IAMModelContext{Cluster: cluster},
-				SSHPublicKeys:   [][]byte{[]byte(sshPublicKeyEntry)},
-				InstanceGroups:  igs,
+				IAMModelContext:   iam.IAMModelContext{Cluster: cluster},
+				SSHPublicKeys:     [][]byte{[]byte(sshPublicKeyEntry)},
+				AllInstanceGroups: igs,
+				InstanceGroups:    igs,
 			},
 		},
 		BootstrapScriptBuilder: &model.BootstrapScriptBuilder{
 			KopsModelContext: &model.KopsModelContext{
-				IAMModelContext: iam.IAMModelContext{Cluster: cluster},
-				InstanceGroups:  igs,
+				IAMModelContext:   iam.IAMModelContext{Cluster: cluster},
+				AllInstanceGroups: igs,
+				InstanceGroups:    igs,
 			},
 			Lifecycle: fi.LifecycleSync,
 		},
@@ -198,7 +201,7 @@ func TestAPIServerAdditionalSecurityGroupsWithNLB(t *testing.T) {
 
 	// We need the CA for the bootstrap script
 	caTask := &fitasks.Keypair{
-		Name:    fi.PtrTo(fi.CertificateIDCA),
+		Name:    new(fi.CertificateIDCA),
 		Subject: "cn=kubernetes",
 		Type:    "ca",
 	}
@@ -207,13 +210,15 @@ func TestAPIServerAdditionalSecurityGroupsWithNLB(t *testing.T) {
 		"apiserver-aggregator-ca",
 		"etcd-clients-ca",
 		"etcd-manager-ca-events",
+		"etcd-manager-ca-leases",
 		"etcd-manager-ca-main",
 		"etcd-peers-ca-events",
+		"etcd-peers-ca-leases",
 		"etcd-peers-ca-main",
 		"service-account",
 	} {
 		task := &fitasks.Keypair{
-			Name:    fi.PtrTo(keypair),
+			Name:    new(keypair),
 			Subject: "cn=" + keypair,
 			Type:    "ca",
 		}
@@ -224,7 +229,7 @@ func TestAPIServerAdditionalSecurityGroupsWithNLB(t *testing.T) {
 		"kube-proxy",
 	} {
 		task := &fitasks.Keypair{
-			Name:    fi.PtrTo(keypair),
+			Name:    new(keypair),
 			Subject: "cn=" + keypair,
 			Signer:  caTask,
 			Type:    "client",
@@ -248,7 +253,7 @@ func TestAPIServerAdditionalSecurityGroupsWithNLB(t *testing.T) {
 	launchTemplateForGroup := func(t *testing.T, ig *kops.InstanceGroup) *awstasks.LaunchTemplate {
 		t.Helper()
 		subdomain := ig.Name
-		if ig.Spec.Role == kops.InstanceGroupRoleControlPlane {
+		if ig.Spec.Role.HasControlPlane() {
 			subdomain = ig.Name + ".masters"
 		}
 		task, ok := c.Tasks[fmt.Sprintf("LaunchTemplate/%s.%s", subdomain, cluster.Name)]

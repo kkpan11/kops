@@ -17,17 +17,17 @@ limitations under the License.
 package nodetasks
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"path"
 	"reflect"
-	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"k8s.io/klog/v2"
-	"k8s.io/kops/pkg/apis/kops"
 	"k8s.io/kops/upup/pkg/fi"
 	"k8s.io/kops/upup/pkg/fi/nodeup/local"
 	"k8s.io/kops/util/pkg/distributions"
@@ -60,15 +60,15 @@ const (
 	dockerPackageName           = "docker-ce"
 )
 
-var _ fi.NodeupHasDependencies = &Package{}
+var _ fi.NodeupHasDependencies = (*Package)(nil)
 
 // GetDependencies computes dependencies for the package task
 func (e *Package) GetDependencies(tasks map[string]fi.NodeupTask) []fi.NodeupTask {
 	var deps []fi.NodeupTask
 
-	// UpdatePackages before we install any packages
+	// AptSource before we install any packages
 	for _, v := range tasks {
-		if _, ok := v.(*UpdatePackages); ok {
+		if _, ok := v.(*AptSource); ok {
 			deps = append(deps, v)
 		}
 	}
@@ -112,7 +112,7 @@ func (e *Package) GetDependencies(tasks map[string]fi.NodeupTask) []fi.NodeupTas
 	return deps
 }
 
-var _ fi.HasName = &Package{}
+var _ fi.HasName = (*Package)(nil)
 
 func (f *Package) GetName() *string {
 	return &f.Name
@@ -146,7 +146,7 @@ func (e *Package) Find(c *fi.NodeupContext) (*Package, error) {
 }
 
 func (e *Package) findDpkg(c *fi.NodeupContext) (*Package, error) {
-	args := []string{"dpkg-query", "-f", "${db:Status-Abbrev}${Version}\\n", "-W", e.Name}
+	args := []string{"dpkg-query", "-f", "${db:Status-Abbrev}\\t${Version}\\n", "-W", e.Name}
 	human := strings.Join(args, " ")
 
 	klog.V(2).Infof("Listing installed packages: %s", human)
@@ -167,22 +167,22 @@ func (e *Package) findDpkg(c *fi.NodeupContext) (*Package, error) {
 			continue
 		}
 
-		tokens := strings.Split(line, " ")
+		tokens := strings.Split(line, "\t")
 		if len(tokens) != 2 {
 			return nil, fmt.Errorf("error parsing dpkg-query line %q", line)
 		}
-		state := tokens[0]
-		version := tokens[1]
+		state := strings.TrimSpace(tokens[0])
+		version := strings.TrimSpace(tokens[1])
 
 		switch state {
 		case "ii":
 			installed = true
 			installedVersion = version
-			healthy = fi.PtrTo(true)
+			healthy = new(true)
 		case "iF", "iU":
 			installed = true
 			installedVersion = version
-			healthy = fi.PtrTo(false)
+			healthy = new(false)
 		case "rc":
 			// removed
 			installed = false
@@ -198,13 +198,13 @@ func (e *Package) findDpkg(c *fi.NodeupContext) (*Package, error) {
 		}
 	}
 
-	if c.T.NodeupConfig.UpdatePolicy != kops.UpdatePolicyExternal || !installed {
+	if !installed {
 		return nil, nil
 	}
 
 	return &Package{
 		Name:    e.Name,
-		Version: fi.PtrTo(installedVersion),
+		Version: new(installedVersion),
 		Healthy: healthy,
 	}, nil
 }
@@ -243,16 +243,16 @@ func (e *Package) findYum(c *fi.NodeupContext) (*Package, error) {
 		installed = true
 		installedVersion = tokens[1]
 		// If we implement unhealthy; be sure to implement repair in Render
-		healthy = fi.PtrTo(true)
+		healthy = new(true)
 	}
 
-	if c.T.NodeupConfig.UpdatePolicy != kops.UpdatePolicyExternal || !installed {
+	if !installed {
 		return nil, nil
 	}
 
 	return &Package{
 		Name:    e.Name,
-		Version: fi.PtrTo(installedVersion),
+		Version: new(installedVersion),
 		Healthy: healthy,
 	}, nil
 }
@@ -269,7 +269,12 @@ func (_ *Package) CheckChanges(a, e, changes *Package) error {
 // It just avoids unnecessary failures from running e.g. concurrent apt-get installs
 var packageManagerLock sync.Mutex
 
+// packageManagerLastUpdated is the last time the package manager update was done
+var packageManagerLastUpdated time.Time
+
 func (_ *Package) RenderLocal(t *local.LocalTarget, a, e, changes *Package) error {
+	// Not adding ctx to signature as RenderLocal seems to be part of a common interface
+	ctx := context.TODO()
 	packageManagerLock.Lock()
 	defer packageManagerLock.Unlock()
 
@@ -312,7 +317,7 @@ func (_ *Package) RenderLocal(t *local.LocalTarget, a, e, changes *Package) erro
 					}
 					hash = parsed
 				}
-				_, err = fi.DownloadURL(fi.ValueOf(pkg.Source), local, hash)
+				_, err = fi.DownloadURL(ctx, fi.ValueOf(pkg.Source), local, hash)
 				if err != nil {
 					return err
 				}
@@ -321,17 +326,30 @@ func (_ *Package) RenderLocal(t *local.LocalTarget, a, e, changes *Package) erro
 			pkgs = append(pkgs, e.Name)
 		}
 
-		var args []string
 		env := os.Environ()
 		if d.IsDebianFamily() {
-			args = []string{"apt-get", "install", "--yes", "--no-install-recommends"}
 			env = append(env, "DEBIAN_FRONTEND=noninteractive")
+		}
+
+		// If the package manager update was less than 10 minutes ago, skip updating the package list.
+		if d.IsDebianFamily() && time.Since(packageManagerLastUpdated) > 10*time.Minute {
+			klog.Infof("Running command apt-get update")
+			cmd := exec.Command("apt-get", "update")
+			cmd.Env = env
+			output, err := cmd.CombinedOutput()
+			if err != nil {
+				return fmt.Errorf("error fetching the list of available packages: %v:\n%s", err, string(output))
+			}
+			// Successful package list update, updating the last updated time.
+			packageManagerLastUpdated = time.Now()
+		}
+
+		var args []string
+		if d.IsDebianFamily() {
+			args = []string{"apt-get", "install", "--yes", "--no-install-recommends"}
 		} else if d.IsRHELFamily() {
 
-			if slices.Contains([]distributions.Distribution{
-				distributions.DistributionRhel8, distributions.DistributionRocky8,
-				distributions.DistributionRhel9, distributions.DistributionRocky9,
-			}, d) {
+			if d.HasDNF() {
 				args = []string{"/usr/bin/dnf", "install", "-y", "--setopt=install_weak_deps=False"}
 			} else {
 				args = []string{"/usr/bin/yum", "install", "-y"}
@@ -341,7 +359,7 @@ func (_ *Package) RenderLocal(t *local.LocalTarget, a, e, changes *Package) erro
 		}
 		args = append(args, pkgs...)
 
-		klog.Infof("running command %s", args)
+		klog.Infof("Running command %s", args)
 		cmd := exec.Command(args[0], args[1:]...)
 		cmd.Env = env
 		output, err := cmd.CombinedOutput()
@@ -354,7 +372,7 @@ func (_ *Package) RenderLocal(t *local.LocalTarget, a, e, changes *Package) erro
 			if strings.Contains(string(output), "dpkg --configure -a") {
 				klog.Warningf("found error requiring dpkg repair: %q", string(output))
 				args := []string{"dpkg", "--configure", "-a"}
-				klog.Infof("running command %s", args)
+				klog.Infof("Running command %s", args)
 				cmd := exec.Command(args[0], args[1:]...)
 				dpkgOutput, err := cmd.CombinedOutput()
 				if err != nil {
@@ -364,6 +382,8 @@ func (_ *Package) RenderLocal(t *local.LocalTarget, a, e, changes *Package) erro
 			}
 			return fmt.Errorf("error installing package %q: %v: %s", e.Name, err, string(output))
 		}
+		// Successful package install, updating the last updated time.
+		packageManagerLastUpdated = time.Now()
 	} else {
 		if changes.Healthy != nil {
 			if d.IsDebianFamily() {

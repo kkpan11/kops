@@ -18,6 +18,9 @@ package v1alpha2
 
 import (
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/klog/v2"
+	"k8s.io/kops/util/pkg/reflectutils"
 )
 
 // NetworkingSpec allows selection and configuration of a networking plugin
@@ -49,12 +52,21 @@ type NetworkingSpec struct {
 	Cilium     *CiliumNetworkingSpec     `json:"cilium,omitempty"`
 	LyftVPC    *LyftVPCNetworkingSpec    `json:"lyftvpc,omitempty"`
 	GCP        *GCPNetworkingSpec        `json:"gce,omitempty"`
+	Kindnet    *KindnetNetworkingSpec    `json:"kindnet,omitempty"`
 }
 
 func (s *NetworkingSpec) IsEmpty() bool {
-	return s.Classic == nil && s.Kubenet == nil && s.External == nil && s.CNI == nil && s.Kopeio == nil &&
-		s.Weave == nil && s.Flannel == nil && s.Calico == nil && s.Canal == nil && s.KubeRouter == nil &&
-		s.Romana == nil && s.AmazonVPC == nil && s.Cilium == nil && s.LyftVPC == nil && s.GCP == nil
+	return s.ConfiguredOptions().Len() == 0
+}
+
+// ConfiguredOptions returns the set of networking options that are configured (non-nil)
+// in the struct.  We only expect a single option to be configured.
+func (s *NetworkingSpec) ConfiguredOptions() sets.Set[string] {
+	options, err := reflectutils.FindSetFields(s, "classic", "kubenet", "external", "cni", "kopeio", "weave", "flannel", "calico", "canal", "kuberouter", "romana", "amazonvpc", "cilium", "lyftvpc", "gce", "kindnet")
+	if err != nil {
+		klog.Fatalf("error getting configured options: %v", err)
+	}
+	return options
 }
 
 // ClassicNetworkingSpec is the specification of classic networking mode, integrated into kubernetes.
@@ -131,7 +143,11 @@ type CalicoNetworkingSpec struct {
 	// AWSSrcDstCheck enables/disables ENI source/destination checks (AWS IPv4 only)
 	// Options: Disable (default for IPv4), Enable, or DoNothing
 	AWSSrcDstCheck string `json:"awsSrcDstCheck,omitempty"`
-	// BPFEnabled enables the eBPF dataplane mode.
+	// BPFEnabled enables the eBPF dataplane mode. When set to true, kube-proxy
+	// must be disabled (spec.kubeProxy.enabled=false); kops will default it
+	// at cluster creation. Calico's BPF mode replaces kube-proxy and from
+	// v3.31 binds the kube-proxy healthz port (10256), so running both
+	// produces a port conflict.
 	BPFEnabled bool `json:"bpfEnabled,omitempty"`
 	// BPFExternalServiceMode controls how traffic from outside the cluster to NodePorts and ClusterIPs is handled.
 	// In Tunnel mode, packet is tunneled from the ingress host to the host with the backing pod and back again.
@@ -185,6 +201,9 @@ type CalicoNetworkingSpec struct {
 	LogSeverityScreen string `json:"logSeverityScreen,omitempty"`
 	// MTU to be set in the cni-network-config for calico.
 	MTU *int32 `json:"mtu,omitempty"`
+	// NFTablesMode configures nftables support in Felix
+	// Options: Disabled, Enabled, Auto
+	NFTablesMode string `json:"nftablesMode,omitempty"`
 	// PrometheusMetricsEnabled can be set to enable the experimental Prometheus
 	// metrics server (default: false)
 	PrometheusMetricsEnabled bool `json:"prometheusMetricsEnabled,omitempty"`
@@ -214,7 +233,7 @@ type CalicoNetworkingSpec struct {
 	VXLANMode string `json:"vxlanMode,omitempty"`
 	// WireguardEnabled enables WireGuard encryption for all on-the-wire pod-to-pod traffic
 	// (default: false)
-	WireguardEnabled bool `json:"wireguardEnabled,omitempty"`
+	WireguardEnabled *bool `json:"wireguardEnabled,omitempty"`
 }
 
 // CanalNetworkingSpec declares that we want Canal networking
@@ -264,7 +283,24 @@ type CanalNetworkingSpec struct {
 }
 
 // KuberouterNetworkingSpec declares that we want Kube-router networking
-type KuberouterNetworkingSpec struct{}
+type KuberouterNetworkingSpec struct {
+	// UseNFTablesForNetpol makes the network policy controller enforce
+	// NetworkPolicies with nftables instead of iptables and ipsets.
+	// This is experimental upstream and only affects the network policy
+	// controller; the service proxy and router controllers are unchanged.
+	// Default: false
+	UseNFTablesForNetpol *bool `json:"useNFTablesForNetpol,omitempty"`
+	// ExternalIPRanges are the CIDRs from which Service externalIPs are accepted.
+	// Setting this or LoadBalancerIPRanges turns on kube-router's strict external
+	// IP validation, which drops any address outside the configured ranges.
+	// Leaving both empty keeps strict validation off.
+	ExternalIPRanges []string `json:"externalIPRanges,omitempty"`
+	// LoadBalancerIPRanges are the CIDRs from which Service loadBalancerIPs are
+	// accepted. Setting this or ExternalIPRanges turns on kube-router's strict
+	// external IP validation, which drops any address outside the configured
+	// ranges. Leaving both empty keeps strict validation off.
+	LoadBalancerIPRanges []string `json:"loadBalancerIPRanges,omitempty"`
+}
 
 // RomanaNetworkingSpec declares that we want Romana networking
 // Romana is deprecated as of kOps 1.18 and removed as of kOps 1.19.
@@ -372,12 +408,20 @@ type CiliumNetworkingSpec struct {
 	// EnableL7Proxy enables L7 proxy for L7 policy enforcement.
 	// Default: true
 	EnableL7Proxy *bool `json:"enableL7Proxy,omitempty"`
+	// EnableLocalRedirectPolicy that enables pod traffic destined to an IP address and port/protocol
+	// tuple or Kubernetes service to be redirected locally to backend pod(s) within a node, using eBPF.
+	// https://docs.cilium.io/en/stable/network/kubernetes/local-redirect-policy/
+	// Default: false
+	EnableLocalRedirectPolicy *bool `json:"enableLocalRedirectPolicy,omitempty"`
 	// EnableBPFMasquerade enables masquerading packets from endpoints leaving the host with BPF instead of iptables.
 	// Default: false
 	EnableBPFMasquerade *bool `json:"enableBPFMasquerade,omitempty"`
 	// EnableEndpointHealthChecking enables connectivity health checking between virtual endpoints.
 	// Default: true
 	EnableEndpointHealthChecking *bool `json:"enableEndpointHealthChecking,omitempty"`
+	// EnableHostFirewall enables the host firewall in the Cilium agent.
+	// Default: false
+	EnableHostFirewall *bool `json:"enableHostFirewall,omitempty"`
 	// EnableTracing is unused.
 	// +k8s:conversion-gen=false
 	EnableTracing bool `json:"enableTracing,omitempty"`
@@ -535,6 +579,9 @@ type CiliumNetworkingSpec struct {
 	// BPFLBMapMax is the maximum number of entries in bpf lb service, backend and affinity maps.
 	// Default: 65536
 	BPFLBMapMax int `json:"bpfLBMapMax,omitempty"`
+	// BPFLBSock enables socket-based LB for E/W traffic.
+	// Default: false
+	BPFLBSock bool `json:"bpfLBSock,omitempty"`
 	// BPFLBSockHostNSOnly enables skipping socket LB for services when inside a pod namespace,
 	// in favor of service LB at the pod interface. Socket LB is still used when in the host namespace.
 	// Required by service mesh (e.g., Istio, Linkerd).
@@ -596,6 +643,9 @@ type CiliumNetworkingSpec struct {
 	// EnableUnreachableRoutes enables unreachable routes on pod deletion.
 	// Default: false
 	EnableUnreachableRoutes *bool `json:"enableUnreachableRoutes,omitempty"`
+	// CniExclusive configures whether to remove other CNI configuration files.
+	// Default: true
+	CniExclusive *bool `json:"cniExclusive,omitempty"`
 	// Hubble configures the Hubble service on the Cilium agent.
 	Hubble *HubbleSpec `json:"hubble,omitempty"`
 
@@ -622,6 +672,13 @@ type CiliumNetworkingSpec struct {
 
 	// Ingress specifies the configuration for Cilium Ingress settings.
 	Ingress *CiliumIngressSpec `json:"ingress,omitempty"`
+
+	// GatewayAPI specifies the configuration for Cilium Gateway API settings.
+	GatewayAPI *CiliumGatewayAPISpec `json:"gatewayAPI,omitempty"`
+
+	// ExtraConfig is appended to the cilium-config ConfigMap. Keys here override any value
+	// rendered by kops. All values must be strings (e.g. "true", not true).
+	ExtraConfig map[string]string `json:"extraConfig,omitempty"`
 }
 
 // CiliumIngressSpec configures Cilium Ingress settings.
@@ -651,13 +708,23 @@ type CiliumIngressSpec struct {
 	SharedLoadBalancerServiceName string `json:"sharedLoadBalancerServiceName,omitempty"`
 }
 
+// CiliumGatewayAPISpec configures Cilium Gateway API settings.
+type CiliumGatewayAPISpec struct {
+	// Enabled specifies whether Cilium Gateway API is enabled.
+	Enabled *bool `json:"enabled,omitempty"`
+
+	// EnableSecretsSync specifies whether synchronization of secrets is enabled.
+	// Default: true
+	EnableSecretsSync *bool `json:"enableSecretsSync,omitempty"`
+}
+
 // HubbleSpec configures the Hubble service on the Cilium agent.
 type HubbleSpec struct {
 	// Enabled decides if Hubble is enabled on the agent or not
 	Enabled *bool `json:"enabled,omitempty"`
 
 	// Metrics is a list of metrics to collect. If empty or null, metrics are disabled.
-	// See https://docs.cilium.io/en/stable/configuration/metrics/#hubble-exported-metrics
+	// See https://docs.cilium.io/en/stable/observability/metrics/#hubble-exported-metrics
 	Metrics []string `json:"metrics,omitempty"`
 }
 
@@ -669,3 +736,22 @@ type LyftVPCNetworkingSpec struct {
 
 // GCPNetworkingSpec is the specification of GCP's native networking mode, using IP aliases.
 type GCPNetworkingSpec struct{}
+
+// KindnetNetworkingSpec configures Kindnet settings.
+type KindnetNetworkingSpec struct {
+	Version                      string                 `json:"version,omitempty"`
+	NetworkPolicies              *bool                  `json:"networkPolicies,omitempty"`
+	AdminNetworkPolicies         *bool                  `json:"adminNetworkPolicies,omitempty"`
+	BaselineAdminNetworkPolicies *bool                  `json:"baselineAdminNetworkPolicies,omitempty"`
+	DNSCaching                   *bool                  `json:"dnsCaching,omitempty"`
+	NAT64                        *bool                  `json:"nat64,omitempty"`
+	FastPathThreshold            *int32                 `json:"fastPathThreshold,omitempty"`
+	Masquerade                   *KindnetMasqueradeSpec `json:"masquerade,omitempty"`
+	LogLevel                     *int32                 `json:"logLevel,omitempty"`
+}
+
+// KindnetMasqueradeSpec configures Kindnet masquerading settings.
+type KindnetMasqueradeSpec struct {
+	Enabled            *bool    `json:"enabled,omitempty"`
+	NonMasqueradeCIDRs []string `json:"nonMasqueradeCIDRs,omitempty"`
+}

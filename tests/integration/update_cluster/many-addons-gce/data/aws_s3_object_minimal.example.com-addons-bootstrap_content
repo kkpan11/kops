@@ -1,69 +1,59 @@
 kind: Addons
 metadata:
-  creationTimestamp: null
   name: bootstrap
 spec:
   addons:
   - id: k8s-1.16
     manifest: kops-controller.addons.k8s.io/k8s-1.16.yaml
-    manifestHash: 29a91260b23a4d9e1eb2b1252cce1b9f670e30463de02d00b5a2de3b1a502828
+    manifestHash: 26621d558715662b1020a88d4e15b40b367ddd999433aadb084d571016e2fdef
     name: kops-controller.addons.k8s.io
     needsRollingUpdate: control-plane
     selector:
       k8s-addon: kops-controller.addons.k8s.io
-    version: 9.99.0
   - id: k8s-1.12
     manifest: coredns.addons.k8s.io/k8s-1.12.yaml
-    manifestHash: ba735657b67049b2042dfd3c49f84a23f31d70b07f9a8828c8a575fc8621ee6f
+    manifestHash: 0b180b32473059784ae4bc805d19bc5596a25a86a84041755b792a4766501627
     name: coredns.addons.k8s.io
     selector:
       k8s-addon: coredns.addons.k8s.io
-    version: 9.99.0
   - id: k8s-1.9
     manifest: kubelet-api.rbac.addons.k8s.io/k8s-1.9.yaml
-    manifestHash: 01c120e887bd98d82ef57983ad58a0b22bc85efb48108092a24c4b82e4c9ea81
+    manifestHash: da91eb5cf9a29f1b03510007d6d54603aef2fc23a305abc9ba496c510dfd3bc7
     name: kubelet-api.rbac.addons.k8s.io
     selector:
       k8s-addon: kubelet-api.rbac.addons.k8s.io
-    version: 9.99.0
   - manifest: limit-range.addons.k8s.io/v1.5.0.yaml
-    manifestHash: 2d55c3bc5e354e84a3730a65b42f39aba630a59dc8d32b30859fcce3d3178bc2
+    manifestHash: 686cc69e559a1c6f5e8b94e38de54a575a25c432ed5ceec565244b965fb5f07f
     name: limit-range.addons.k8s.io
     selector:
       k8s-addon: limit-range.addons.k8s.io
-    version: 9.99.0
   - id: k8s-1.12
     manifest: dns-controller.addons.k8s.io/k8s-1.12.yaml
-    manifestHash: 6350b0de2ffb762f97fe83e9d9520a64e9d65a97baf547eded729a52945cc8d4
+    manifestHash: b152233243c9e23a3d6aec7b67209d47ded48c25e24e50fcf000bae06328ba70
     name: dns-controller.addons.k8s.io
     selector:
       k8s-addon: dns-controller.addons.k8s.io
-    version: 9.99.0
   - id: k8s-1.15
     manifest: cluster-autoscaler.addons.k8s.io/k8s-1.15.yaml
-    manifestHash: a60534cf6f674d86d17a32490fef182ebf5d821523402ea8cbb1d589eaec5031
+    manifestHash: c8eac56aa47f9d6ce905c09c04c1e0deef4e9a7a97105c430fcc470c931839e5
     name: cluster-autoscaler.addons.k8s.io
     selector:
       k8s-addon: cluster-autoscaler.addons.k8s.io
-    version: 9.99.0
   - id: k8s-1.11
     manifest: metrics-server.addons.k8s.io/k8s-1.11.yaml
-    manifestHash: f5a15bd72ed37b6a3e36df1bddd77c6440f6b067c3b97f3d216e24d2ed014826
+    manifestHash: af124c30376f03ec60e86b5852a27b34ffde2844946844ace6f09335380d8c63
     name: metrics-server.addons.k8s.io
     needsPKI: true
     selector:
       k8s-app: metrics-server
-    version: 9.99.0
   - id: k8s-1.16
     manifest: certmanager.io/k8s-1.16.yaml
-    manifestHash: dd98c17b9b3aabaf2e061353104d4ec52bec8f023cfecddb3911efbcad3ef566
+    manifestHash: 43732258f53c5ff0b3485cad284217ef52f0aebdaa75bdc8d3d1aa76e1434cd8
     name: certmanager.io
     prune:
       kinds:
       - kind: ConfigMap
         labelSelector: addon.kops.k8s.io/name=certmanager.io,app.kubernetes.io/managed-by=kops
-        namespaces:
-        - kube-system
       - kind: Service
         labelSelector: addon.kops.k8s.io/name=certmanager.io,app.kubernetes.io/managed-by=kops
         namespaces:
@@ -109,31 +99,21 @@ spec:
         namespaces:
         - kube-system
     selector: null
-    version: 9.99.0
   - id: v1.7.0
     manifest: storage-gce.addons.k8s.io/v1.7.0.yaml
-    manifestHash: 6c6d100b10243fc62e0195706aa862b42632faeac05a117d07a263a2c5a8e87c
+    manifestHash: 4f73c7d683f04e61d60e90053a6db1fd82272dc0c13790390740f5e207181c77
     name: storage-gce.addons.k8s.io
     selector:
       k8s-addon: storage-gce.addons.k8s.io
-    version: 9.99.0
   - id: k8s-1.23
     manifest: gcp-pd-csi-driver.addons.k8s.io/k8s-1.23.yaml
-    manifestHash: 07463edd469b304d500d8f7e263e495797e10d78a3e990edeed94756160a67a4
+    manifestHash: 84ec39b04fcd3731091fa746930282f4694a318010e64819c4ab18c9e629d556
     name: gcp-pd-csi-driver.addons.k8s.io
     selector:
       k8s-addon: gcp-pd-csi-driver.addons.k8s.io
-    version: 9.99.0
-  - id: v0.1.12
-    manifest: metadata-proxy.addons.k8s.io/v0.1.12.yaml
-    manifestHash: 5b18a0e4a56168a792e1366d4bd57fe7c232a0e78baf91241ba61ffcbeb79bf5
-    name: metadata-proxy.addons.k8s.io
-    selector:
-      k8s-addon: metadata-proxy.addons.k8s.io
-    version: 9.99.0
   - id: k8s-1.23
     manifest: gcp-cloud-controller.addons.k8s.io/k8s-1.23.yaml
-    manifestHash: 3c55d971edba1793b82df1a202b0f429a778f2f4f8294c010d7a4fb7aca70c8b
+    manifestHash: fc775c8f58cf2a655c18525c6e47d8320617b396b767ee9697cde2b5ef016df0
     name: gcp-cloud-controller.addons.k8s.io
     prune:
       kinds:
@@ -183,4 +163,3 @@ spec:
         - kube-system
     selector:
       k8s-addon: gcp-cloud-controller.addons.k8s.io
-    version: 9.99.0

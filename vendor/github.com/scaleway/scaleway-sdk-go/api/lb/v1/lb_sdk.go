@@ -14,11 +14,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/scaleway/scaleway-sdk-go/internal/errors"
-	"github.com/scaleway/scaleway-sdk-go/internal/marshaler"
-	"github.com/scaleway/scaleway-sdk-go/internal/parameter"
+	"github.com/scaleway/scaleway-sdk-go/errors"
+	"github.com/scaleway/scaleway-sdk-go/internal/async"
+	"github.com/scaleway/scaleway-sdk-go/marshaler"
 	"github.com/scaleway/scaleway-sdk-go/namegenerator"
+	"github.com/scaleway/scaleway-sdk-go/parameter"
 	"github.com/scaleway/scaleway-sdk-go/scw"
+)
+
+const (
+	defaultLBRetryInterval = 15 * time.Second
+	defaultLBTimeout       = 5 * time.Minute
 )
 
 // always import dependencies
@@ -49,7 +55,7 @@ const (
 func (enum ACLActionRedirectRedirectType) String() string {
 	if enum == "" {
 		// return default value if empty
-		return "location"
+		return string(ACLActionRedirectRedirectTypeLocation)
 	}
 	return string(enum)
 }
@@ -87,7 +93,7 @@ const (
 func (enum ACLActionType) String() string {
 	if enum == "" {
 		// return default value if empty
-		return "allow"
+		return string(ACLActionTypeAllow)
 	}
 	return string(enum)
 }
@@ -128,7 +134,7 @@ const (
 func (enum ACLHTTPFilter) String() string {
 	if enum == "" {
 		// return default value if empty
-		return "acl_http_filter_none"
+		return string(ACLHTTPFilterACLHTTPFilterNone)
 	}
 	return string(enum)
 }
@@ -171,7 +177,7 @@ const (
 func (enum BackendServerStatsHealthCheckStatus) String() string {
 	if enum == "" {
 		// return default value if empty
-		return "unknown"
+		return string(BackendServerStatsHealthCheckStatusUnknown)
 	}
 	return string(enum)
 }
@@ -213,7 +219,7 @@ const (
 func (enum BackendServerStatsServerState) String() string {
 	if enum == "" {
 		// return default value if empty
-		return "stopped"
+		return string(BackendServerStatsServerStateStopped)
 	}
 	return string(enum)
 }
@@ -253,7 +259,7 @@ const (
 func (enum CertificateStatus) String() string {
 	if enum == "" {
 		// return default value if empty
-		return "pending"
+		return string(CertificateStatusPending)
 	}
 	return string(enum)
 }
@@ -291,7 +297,7 @@ const (
 func (enum CertificateType) String() string {
 	if enum == "" {
 		// return default value if empty
-		return "letsencryt"
+		return string(CertificateTypeLetsencryt)
 	}
 	return string(enum)
 }
@@ -329,7 +335,7 @@ const (
 func (enum ForwardPortAlgorithm) String() string {
 	if enum == "" {
 		// return default value if empty
-		return "roundrobin"
+		return string(ForwardPortAlgorithmRoundrobin)
 	}
 	return string(enum)
 }
@@ -372,7 +378,7 @@ const (
 func (enum InstanceStatus) String() string {
 	if enum == "" {
 		// return default value if empty
-		return "unknown"
+		return string(InstanceStatusUnknown)
 	}
 	return string(enum)
 }
@@ -423,7 +429,7 @@ const (
 func (enum LBStatus) String() string {
 	if enum == "" {
 		// return default value if empty
-		return "unknown"
+		return string(LBStatusUnknown)
 	}
 	return string(enum)
 }
@@ -471,7 +477,7 @@ const (
 func (enum LBTypeStock) String() string {
 	if enum == "" {
 		// return default value if empty
-		return "unknown"
+		return string(LBTypeStockUnknown)
 	}
 	return string(enum)
 }
@@ -512,7 +518,7 @@ const (
 func (enum ListACLRequestOrderBy) String() string {
 	if enum == "" {
 		// return default value if empty
-		return "created_at_asc"
+		return string(ListACLRequestOrderByCreatedAtAsc)
 	}
 	return string(enum)
 }
@@ -553,7 +559,7 @@ const (
 func (enum ListBackendsRequestOrderBy) String() string {
 	if enum == "" {
 		// return default value if empty
-		return "created_at_asc"
+		return string(ListBackendsRequestOrderByCreatedAtAsc)
 	}
 	return string(enum)
 }
@@ -594,7 +600,7 @@ const (
 func (enum ListCertificatesRequestOrderBy) String() string {
 	if enum == "" {
 		// return default value if empty
-		return "created_at_asc"
+		return string(ListCertificatesRequestOrderByCreatedAtAsc)
 	}
 	return string(enum)
 }
@@ -635,7 +641,7 @@ const (
 func (enum ListFrontendsRequestOrderBy) String() string {
 	if enum == "" {
 		// return default value if empty
-		return "created_at_asc"
+		return string(ListFrontendsRequestOrderByCreatedAtAsc)
 	}
 	return string(enum)
 }
@@ -675,7 +681,7 @@ const (
 func (enum ListIPsRequestIPType) String() string {
 	if enum == "" {
 		// return default value if empty
-		return "all"
+		return string(ListIPsRequestIPTypeAll)
 	}
 	return string(enum)
 }
@@ -715,7 +721,7 @@ const (
 func (enum ListLBsRequestOrderBy) String() string {
 	if enum == "" {
 		// return default value if empty
-		return "created_at_asc"
+		return string(ListLBsRequestOrderByCreatedAtAsc)
 	}
 	return string(enum)
 }
@@ -754,7 +760,7 @@ const (
 func (enum ListPrivateNetworksRequestOrderBy) String() string {
 	if enum == "" {
 		// return default value if empty
-		return "created_at_asc"
+		return string(ListPrivateNetworksRequestOrderByCreatedAtAsc)
 	}
 	return string(enum)
 }
@@ -791,7 +797,7 @@ const (
 func (enum ListRoutesRequestOrderBy) String() string {
 	if enum == "" {
 		// return default value if empty
-		return "created_at_asc"
+		return string(ListRoutesRequestOrderByCreatedAtAsc)
 	}
 	return string(enum)
 }
@@ -830,7 +836,7 @@ const (
 func (enum ListSubscriberRequestOrderBy) String() string {
 	if enum == "" {
 		// return default value if empty
-		return "created_at_asc"
+		return string(ListSubscriberRequestOrderByCreatedAtAsc)
 	}
 	return string(enum)
 }
@@ -869,7 +875,7 @@ const (
 func (enum OnMarkedDownAction) String() string {
 	if enum == "" {
 		// return default value if empty
-		return "on_marked_down_action_none"
+		return string(OnMarkedDownActionOnMarkedDownActionNone)
 	}
 	return string(enum)
 }
@@ -908,7 +914,7 @@ const (
 func (enum PrivateNetworkStatus) String() string {
 	if enum == "" {
 		// return default value if empty
-		return "unknown"
+		return string(PrivateNetworkStatusUnknown)
 	}
 	return string(enum)
 }
@@ -947,7 +953,7 @@ const (
 func (enum Protocol) String() string {
 	if enum == "" {
 		// return default value if empty
-		return "tcp"
+		return string(ProtocolTCP)
 	}
 	return string(enum)
 }
@@ -988,7 +994,7 @@ const (
 func (enum ProxyProtocol) String() string {
 	if enum == "" {
 		// return default value if empty
-		return "proxy_protocol_unknown"
+		return string(ProxyProtocolProxyProtocolUnknown)
 	}
 	return string(enum)
 }
@@ -1031,7 +1037,7 @@ const (
 func (enum SSLCompatibilityLevel) String() string {
 	if enum == "" {
 		// return default value if empty
-		return "ssl_compatibility_level_unknown"
+		return string(SSLCompatibilityLevelSslCompatibilityLevelUnknown)
 	}
 	return string(enum)
 }
@@ -1071,7 +1077,7 @@ const (
 func (enum StickySessionsType) String() string {
 	if enum == "" {
 		// return default value if empty
-		return "none"
+		return string(StickySessionsTypeNone)
 	}
 	return string(enum)
 }
@@ -1113,7 +1119,7 @@ type SubscriberWebhookConfig struct {
 
 // HealthCheckHTTPConfig: health check http config.
 type HealthCheckHTTPConfig struct {
-	// URI: the HTTP URI to use when performing a health check on backend servers.
+	// URI: the HTTP path to use when performing a health check on backend servers.
 	URI string `json:"uri"`
 
 	// Method: the HTTP method used when performing a health check on backend servers.
@@ -1128,7 +1134,7 @@ type HealthCheckHTTPConfig struct {
 
 // HealthCheckHTTPSConfig: health check https config.
 type HealthCheckHTTPSConfig struct {
-	// URI: the HTTP URI to use when performing a health check on backend servers.
+	// URI: the HTTP path to use when performing a health check on backend servers.
 	URI string `json:"uri"`
 
 	// Method: the HTTP method used when performing a health check on backend servers.
@@ -1145,8 +1151,7 @@ type HealthCheckHTTPSConfig struct {
 }
 
 // HealthCheckLdapConfig: health check ldap config.
-type HealthCheckLdapConfig struct {
-}
+type HealthCheckLdapConfig struct{}
 
 // HealthCheckMysqlConfig: health check mysql config.
 type HealthCheckMysqlConfig struct {
@@ -1161,12 +1166,10 @@ type HealthCheckPgsqlConfig struct {
 }
 
 // HealthCheckRedisConfig: health check redis config.
-type HealthCheckRedisConfig struct {
-}
+type HealthCheckRedisConfig struct{}
 
 // HealthCheckTCPConfig: health check tcp config.
-type HealthCheckTCPConfig struct {
-}
+type HealthCheckTCPConfig struct{}
 
 // IP: ip.
 type IP struct {
@@ -1258,7 +1261,7 @@ type HealthCheck struct {
 	// Precisely one of TCPConfig, MysqlConfig, PgsqlConfig, LdapConfig, RedisConfig, HTTPConfig, HTTPSConfig must be set.
 	TCPConfig *HealthCheckTCPConfig `json:"tcp_config,omitempty"`
 
-	// MysqlConfig: object to configure a MySQL health check. The check requires MySQL >=3.22, for older versions, use a TCP health check.
+	// MysqlConfig: object to configure a MySQL health check. The check requires MySQL >=3.22 or <9.0. For older or newer versions, use a TCP health check.
 	// Precisely one of TCPConfig, MysqlConfig, PgsqlConfig, LdapConfig, RedisConfig, HTTPConfig, HTTPSConfig must be set.
 	MysqlConfig *HealthCheckMysqlConfig `json:"mysql_config,omitempty"`
 
@@ -1460,7 +1463,7 @@ type Backend struct {
 	// UpdatedAt: date at which the backend was updated.
 	UpdatedAt *time.Time `json:"updated_at"`
 
-	// FailoverHost: scaleway S3 bucket website to be served as failover if all backend servers are down, e.g. failover-website.s3-website.fr-par.scw.cloud.
+	// FailoverHost: scaleway Object Storage bucket website to be served as failover if all backend servers are down, e.g. failover-website.s3-website.fr-par.scw.cloud.
 	FailoverHost *string `json:"failover_host"`
 
 	// SslBridging: defines whether to enable SSL bridging between the Load Balancer and backend servers.
@@ -1577,6 +1580,9 @@ type ACLMatch struct {
 	// IPSubnet: list of IPs or CIDR v4/v6 addresses to filter for from the client side.
 	IPSubnet []*string `json:"ip_subnet"`
 
+	// IPsEdgeServices: defines whether Edge Services IPs should be matched.
+	IPsEdgeServices bool `json:"ips_edge_services"`
+
 	// HTTPFilter: type of HTTP filter to match. Extracts the request's URL path, which starts at the first slash and ends before the question mark (without the host part). Defines where to filter for the http_filter_value. Only supported for HTTP backends.
 	// Default value: acl_http_filter_none
 	HTTPFilter ACLHTTPFilter `json:"http_filter"`
@@ -1625,6 +1631,12 @@ type Frontend struct {
 
 	// EnableHTTP3: defines whether to enable HTTP/3 protocol on the frontend.
 	EnableHTTP3 bool `json:"enable_http3"`
+
+	// ConnectionRateLimit: rate limit for new connections established on this frontend. Use 0 value to disable, else value is connections per second.
+	ConnectionRateLimit *uint32 `json:"connection_rate_limit"`
+
+	// EnableAccessLogs: defines whether to enable access logs on the frontend.
+	EnableAccessLogs bool `json:"enable_access_logs"`
 }
 
 func (m *Frontend) UnmarshalJSON(b []byte) error {
@@ -1662,8 +1674,7 @@ type PrivateNetworkDHCPConfig struct {
 }
 
 // PrivateNetworkIpamConfig: private network ipam config.
-type PrivateNetworkIpamConfig struct {
-}
+type PrivateNetworkIpamConfig struct{}
 
 // PrivateNetworkStaticConfig: private network static config.
 type PrivateNetworkStaticConfig struct {
@@ -1674,12 +1685,19 @@ type PrivateNetworkStaticConfig struct {
 // RouteMatch: route match.
 type RouteMatch struct {
 	// Sni: value to match in the Server Name Indication TLS extension (SNI) field from an incoming connection made via an SSL/TLS transport layer. This field should be set for routes on TCP Load Balancers.
-	// Precisely one of Sni, HostHeader must be set.
+	// Precisely one of Sni, HostHeader, PathBegin must be set.
 	Sni *string `json:"sni,omitempty"`
 
-	// HostHeader: value to match in the HTTP Host request header from an incoming connection. This field should be set for routes on HTTP Load Balancers.
-	// Precisely one of Sni, HostHeader must be set.
+	// HostHeader: value to match in the HTTP Host request header from an incoming request. This field should be set for routes on HTTP Load Balancers.
+	// Precisely one of Sni, HostHeader, PathBegin must be set.
 	HostHeader *string `json:"host_header,omitempty"`
+
+	// MatchSubdomains: if true, all subdomains will match.
+	MatchSubdomains bool `json:"match_subdomains"`
+
+	// PathBegin: value to match in the URL beginning path from an incoming request.
+	// Precisely one of Sni, HostHeader, PathBegin must be set.
+	PathBegin *string `json:"path_begin,omitempty"`
 }
 
 // CreateCertificateRequestCustomCertificate: create certificate request custom certificate.
@@ -1728,7 +1746,7 @@ type ACL struct {
 	// Name: ACL name.
 	Name string `json:"name"`
 
-	// Match: ACL match filter object. One of `ip_subnet` or `http_filter` & `http_filter_value` are required.
+	// Match: ACL match filter object. One of `ip_subnet`, `ips_edge_services` or `http_filter` & `http_filter_value` are required.
 	Match *ACLMatch `json:"match"`
 
 	// Action: action to take when incoming traffic matches an ACL filter.
@@ -1832,7 +1850,7 @@ type ACLSpec struct {
 	// Action: action to take when incoming traffic matches an ACL filter.
 	Action *ACLAction `json:"action"`
 
-	// Match: ACL match filter object. One of `ip_subnet` or `http_filter` and `http_filter_value` are required.
+	// Match: ACL match filter object. One of `ip_subnet`, `ips_edge_services` or `http_filter` and `http_filter_value` are required.
 	Match *ACLMatch `json:"match"`
 
 	// Index: priority of this ACL (ACLs are applied in ascending order, 0 is the first ACL executed).
@@ -1895,7 +1913,7 @@ type CreateACLRequest struct {
 	// Action: action to take when incoming traffic matches an ACL filter.
 	Action *ACLAction `json:"action"`
 
-	// Match: ACL match filter object. One of `ip_subnet` or `http_filter` & `http_filter_value` are required.
+	// Match: ACL match filter object. One of `ip_subnet`, `ips_edge_services` or `http_filter` & `http_filter_value` are required.
 	Match *ACLMatch `json:"match,omitempty"`
 
 	// Index: priority of this ACL (ACLs are applied in ascending order, 0 is the first ACL executed).
@@ -1960,7 +1978,7 @@ type CreateBackendRequest struct {
 	// Default value: proxy_protocol_unknown
 	ProxyProtocol ProxyProtocol `json:"proxy_protocol"`
 
-	// FailoverHost: scaleway S3 bucket website to be served as failover if all backend servers are down, e.g. failover-website.s3-website.fr-par.scw.cloud.
+	// FailoverHost: scaleway Object Storage bucket website to be served as failover if all backend servers are down, e.g. failover-website.s3-website.fr-par.scw.cloud.
 	FailoverHost *string `json:"failover_host,omitempty"`
 
 	// SslBridging: defines whether to enable SSL bridging between the Load Balancer and backend servers.
@@ -2066,6 +2084,12 @@ type CreateFrontendRequest struct {
 
 	// EnableHTTP3: defines whether to enable HTTP/3 protocol on the frontend.
 	EnableHTTP3 bool `json:"enable_http3"`
+
+	// ConnectionRateLimit: rate limit for new connections established on this frontend. Use 0 value to disable, else value is connections per second.
+	ConnectionRateLimit *uint32 `json:"connection_rate_limit,omitempty"`
+
+	// EnableAccessLogs: defines whether to enable access logs on the frontend.
+	EnableAccessLogs bool `json:"enable_access_logs"`
 }
 
 func (m *CreateFrontendRequest) UnmarshalJSON(b []byte) error {
@@ -2386,7 +2410,7 @@ func (r *ListACLResponse) UnsafeGetTotalCount() uint32 {
 
 // UnsafeAppend should not be used
 // Internal usage only
-func (r *ListACLResponse) UnsafeAppend(res interface{}) (uint32, error) {
+func (r *ListACLResponse) UnsafeAppend(res any) (uint32, error) {
 	results, ok := res.(*ListACLResponse)
 	if !ok {
 		return 0, errors.New("%T type cannot be appended to type %T", res, r)
@@ -2454,7 +2478,7 @@ func (r *ListBackendStatsResponse) UnsafeGetTotalCount() uint32 {
 
 // UnsafeAppend should not be used
 // Internal usage only
-func (r *ListBackendStatsResponse) UnsafeAppend(res interface{}) (uint32, error) {
+func (r *ListBackendStatsResponse) UnsafeAppend(res any) (uint32, error) {
 	results, ok := res.(*ListBackendStatsResponse)
 	if !ok {
 		return 0, errors.New("%T type cannot be appended to type %T", res, r)
@@ -2504,7 +2528,7 @@ func (r *ListBackendsResponse) UnsafeGetTotalCount() uint32 {
 
 // UnsafeAppend should not be used
 // Internal usage only
-func (r *ListBackendsResponse) UnsafeAppend(res interface{}) (uint32, error) {
+func (r *ListBackendsResponse) UnsafeAppend(res any) (uint32, error) {
 	results, ok := res.(*ListBackendsResponse)
 	if !ok {
 		return 0, errors.New("%T type cannot be appended to type %T", res, r)
@@ -2554,7 +2578,7 @@ func (r *ListCertificatesResponse) UnsafeGetTotalCount() uint32 {
 
 // UnsafeAppend should not be used
 // Internal usage only
-func (r *ListCertificatesResponse) UnsafeAppend(res interface{}) (uint32, error) {
+func (r *ListCertificatesResponse) UnsafeAppend(res any) (uint32, error) {
 	results, ok := res.(*ListCertificatesResponse)
 	if !ok {
 		return 0, errors.New("%T type cannot be appended to type %T", res, r)
@@ -2604,7 +2628,7 @@ func (r *ListFrontendsResponse) UnsafeGetTotalCount() uint32 {
 
 // UnsafeAppend should not be used
 // Internal usage only
-func (r *ListFrontendsResponse) UnsafeAppend(res interface{}) (uint32, error) {
+func (r *ListFrontendsResponse) UnsafeAppend(res any) (uint32, error) {
 	results, ok := res.(*ListFrontendsResponse)
 	if !ok {
 		return 0, errors.New("%T type cannot be appended to type %T", res, r)
@@ -2660,7 +2684,7 @@ func (r *ListIPsResponse) UnsafeGetTotalCount() uint32 {
 
 // UnsafeAppend should not be used
 // Internal usage only
-func (r *ListIPsResponse) UnsafeAppend(res interface{}) (uint32, error) {
+func (r *ListIPsResponse) UnsafeAppend(res any) (uint32, error) {
 	results, ok := res.(*ListIPsResponse)
 	if !ok {
 		return 0, errors.New("%T type cannot be appended to type %T", res, r)
@@ -2707,7 +2731,7 @@ func (r *ListLBPrivateNetworksResponse) UnsafeGetTotalCount() uint32 {
 
 // UnsafeAppend should not be used
 // Internal usage only
-func (r *ListLBPrivateNetworksResponse) UnsafeAppend(res interface{}) (uint32, error) {
+func (r *ListLBPrivateNetworksResponse) UnsafeAppend(res any) (uint32, error) {
 	results, ok := res.(*ListLBPrivateNetworksResponse)
 	if !ok {
 		return 0, errors.New("%T type cannot be appended to type %T", res, r)
@@ -2747,7 +2771,7 @@ func (r *ListLBTypesResponse) UnsafeGetTotalCount() uint32 {
 
 // UnsafeAppend should not be used
 // Internal usage only
-func (r *ListLBTypesResponse) UnsafeAppend(res interface{}) (uint32, error) {
+func (r *ListLBTypesResponse) UnsafeAppend(res any) (uint32, error) {
 	results, ok := res.(*ListLBTypesResponse)
 	if !ok {
 		return 0, errors.New("%T type cannot be appended to type %T", res, r)
@@ -2803,7 +2827,7 @@ func (r *ListLBsResponse) UnsafeGetTotalCount() uint32 {
 
 // UnsafeAppend should not be used
 // Internal usage only
-func (r *ListLBsResponse) UnsafeAppend(res interface{}) (uint32, error) {
+func (r *ListLBsResponse) UnsafeAppend(res any) (uint32, error) {
 	results, ok := res.(*ListLBsResponse)
 	if !ok {
 		return 0, errors.New("%T type cannot be appended to type %T", res, r)
@@ -2850,7 +2874,7 @@ func (r *ListRoutesResponse) UnsafeGetTotalCount() uint32 {
 
 // UnsafeAppend should not be used
 // Internal usage only
-func (r *ListRoutesResponse) UnsafeAppend(res interface{}) (uint32, error) {
+func (r *ListRoutesResponse) UnsafeAppend(res any) (uint32, error) {
 	results, ok := res.(*ListRoutesResponse)
 	if !ok {
 		return 0, errors.New("%T type cannot be appended to type %T", res, r)
@@ -2903,7 +2927,7 @@ func (r *ListSubscriberResponse) UnsafeGetTotalCount() uint32 {
 
 // UnsafeAppend should not be used
 // Internal usage only
-func (r *ListSubscriberResponse) UnsafeAppend(res interface{}) (uint32, error) {
+func (r *ListSubscriberResponse) UnsafeAppend(res any) (uint32, error) {
 	results, ok := res.(*ListSubscriberResponse)
 	if !ok {
 		return 0, errors.New("%T type cannot be appended to type %T", res, r)
@@ -2964,7 +2988,7 @@ func (r *SetACLsResponse) UnsafeGetTotalCount() uint32 {
 
 // UnsafeAppend should not be used
 // Internal usage only
-func (r *SetACLsResponse) UnsafeAppend(res interface{}) (uint32, error) {
+func (r *SetACLsResponse) UnsafeAppend(res any) (uint32, error) {
 	results, ok := res.(*SetACLsResponse)
 	if !ok {
 		return 0, errors.New("%T type cannot be appended to type %T", res, r)
@@ -3022,7 +3046,7 @@ type UpdateACLRequest struct {
 	// Action: action to take when incoming traffic matches an ACL filter.
 	Action *ACLAction `json:"action"`
 
-	// Match: ACL match filter object. One of `ip_subnet` or `http_filter` & `http_filter_value` are required.
+	// Match: ACL match filter object. One of `ip_subnet`, `ips_edge_services` or `http_filter` & `http_filter_value` are required.
 	Match *ACLMatch `json:"match,omitempty"`
 
 	// Index: priority of this ACL (ACLs are applied in ascending order, 0 is the first ACL executed).
@@ -3081,7 +3105,7 @@ type UpdateBackendRequest struct {
 	// Default value: proxy_protocol_unknown
 	ProxyProtocol ProxyProtocol `json:"proxy_protocol"`
 
-	// FailoverHost: scaleway S3 bucket website to be served as failover if all backend servers are down, e.g. failover-website.s3-website.fr-par.scw.cloud.
+	// FailoverHost: scaleway Object Storage bucket website to be served as failover if all backend servers are down, e.g. failover-website.s3-website.fr-par.scw.cloud.
 	FailoverHost *string `json:"failover_host,omitempty"`
 
 	// SslBridging: defines whether to enable SSL bridging between the Load Balancer and backend servers.
@@ -3179,6 +3203,12 @@ type UpdateFrontendRequest struct {
 
 	// EnableHTTP3: defines whether to enable HTTP/3 protocol on the frontend.
 	EnableHTTP3 bool `json:"enable_http3"`
+
+	// ConnectionRateLimit: rate limit for new connections established on this frontend. Use 0 value to disable, else value is connections per second.
+	ConnectionRateLimit *uint32 `json:"connection_rate_limit,omitempty"`
+
+	// EnableAccessLogs: defines whether to enable access logs on the frontend.
+	EnableAccessLogs *bool `json:"enable_access_logs,omitempty"`
 }
 
 func (m *UpdateFrontendRequest) UnmarshalJSON(b []byte) error {
@@ -3236,7 +3266,7 @@ type UpdateHealthCheckRequest struct {
 	// Precisely one of TCPConfig, MysqlConfig, PgsqlConfig, LdapConfig, RedisConfig, HTTPConfig, HTTPSConfig must be set.
 	TCPConfig *HealthCheckTCPConfig `json:"tcp_config,omitempty"`
 
-	// MysqlConfig: object to configure a MySQL health check. The check requires MySQL >=3.22, for older versions, use a TCP health check.
+	// MysqlConfig: object to configure a MySQL health check. The check requires MySQL >=3.22 or <9.0. For older or newer versions, use a TCP health check.
 	// Precisely one of TCPConfig, MysqlConfig, PgsqlConfig, LdapConfig, RedisConfig, HTTPConfig, HTTPSConfig must be set.
 	MysqlConfig *HealthCheckMysqlConfig `json:"mysql_config,omitempty"`
 
@@ -3392,7 +3422,7 @@ type ZonedAPIAttachPrivateNetworkRequest struct {
 	LBID string `json:"-"`
 
 	// PrivateNetworkID: private Network ID.
-	PrivateNetworkID string `json:"-"`
+	PrivateNetworkID string `json:"private_network_id"`
 
 	// Deprecated: StaticConfig: object containing an array of a local IP address for the Load Balancer on this Private Network.
 	// Precisely one of StaticConfig, DHCPConfig, IpamConfig must be set.
@@ -3424,7 +3454,7 @@ type ZonedAPICreateACLRequest struct {
 	// Action: action to take when incoming traffic matches an ACL filter.
 	Action *ACLAction `json:"action"`
 
-	// Match: ACL match filter object. One of `ip_subnet` or `http_filter` & `http_filter_value` are required.
+	// Match: ACL match filter object. One of `ip_subnet`, `ips_edge_services` or `http_filter` & `http_filter_value` are required.
 	Match *ACLMatch `json:"match,omitempty"`
 
 	// Index: priority of this ACL (ACLs are applied in ascending order, 0 is the first ACL executed).
@@ -3489,7 +3519,7 @@ type ZonedAPICreateBackendRequest struct {
 	// Default value: proxy_protocol_unknown
 	ProxyProtocol ProxyProtocol `json:"proxy_protocol"`
 
-	// FailoverHost: scaleway S3 bucket website to be served as failover if all backend servers are down, e.g. failover-website.s3-website.fr-par.scw.cloud.
+	// FailoverHost: scaleway Object Storage bucket website to be served as failover if all backend servers are down, e.g. failover-website.s3-website.fr-par.scw.cloud.
 	FailoverHost *string `json:"failover_host,omitempty"`
 
 	// SslBridging: defines whether to enable SSL bridging between the Load Balancer and backend servers.
@@ -3595,6 +3625,12 @@ type ZonedAPICreateFrontendRequest struct {
 
 	// EnableHTTP3: defines whether to enable HTTP/3 protocol on the frontend.
 	EnableHTTP3 bool `json:"enable_http3"`
+
+	// ConnectionRateLimit: rate limit for new connections established on this frontend. Use 0 value to disable, else value is connections per second.
+	ConnectionRateLimit *uint32 `json:"connection_rate_limit,omitempty"`
+
+	// EnableAccessLogs: defines whether to enable access logs on the frontend.
+	EnableAccessLogs bool `json:"enable_access_logs"`
 }
 
 func (m *ZonedAPICreateFrontendRequest) UnmarshalJSON(b []byte) error {
@@ -3805,7 +3841,7 @@ type ZonedAPIDetachPrivateNetworkRequest struct {
 	LBID string `json:"-"`
 
 	// PrivateNetworkID: set your instance private network id.
-	PrivateNetworkID string `json:"-"`
+	PrivateNetworkID string `json:"private_network_id"`
 }
 
 // ZonedAPIGetACLRequest: zoned api get acl request.
@@ -4221,7 +4257,7 @@ type ZonedAPIUpdateACLRequest struct {
 	// Action: action to take when incoming traffic matches an ACL filter.
 	Action *ACLAction `json:"action"`
 
-	// Match: ACL match filter object. One of `ip_subnet` or `http_filter` & `http_filter_value` are required.
+	// Match: ACL match filter object. One of `ip_subnet`, `ips_edge_services` or `http_filter` & `http_filter_value` are required.
 	Match *ACLMatch `json:"match,omitempty"`
 
 	// Index: priority of this ACL (ACLs are applied in ascending order, 0 is the first ACL executed).
@@ -4280,7 +4316,7 @@ type ZonedAPIUpdateBackendRequest struct {
 	// Default value: proxy_protocol_unknown
 	ProxyProtocol ProxyProtocol `json:"proxy_protocol"`
 
-	// FailoverHost: scaleway S3 bucket website to be served as failover if all backend servers are down, e.g. failover-website.s3-website.fr-par.scw.cloud.
+	// FailoverHost: scaleway Object Storage bucket website to be served as failover if all backend servers are down, e.g. failover-website.s3-website.fr-par.scw.cloud.
 	FailoverHost *string `json:"failover_host,omitempty"`
 
 	// SslBridging: defines whether to enable SSL bridging between the Load Balancer and backend servers.
@@ -4378,6 +4414,12 @@ type ZonedAPIUpdateFrontendRequest struct {
 
 	// EnableHTTP3: defines whether to enable HTTP/3 protocol on the frontend.
 	EnableHTTP3 bool `json:"enable_http3"`
+
+	// ConnectionRateLimit: rate limit for new connections established on this frontend. Use 0 value to disable, else value is connections per second.
+	ConnectionRateLimit *uint32 `json:"connection_rate_limit,omitempty"`
+
+	// EnableAccessLogs: defines whether to enable access logs on the frontend.
+	EnableAccessLogs *bool `json:"enable_access_logs,omitempty"`
 }
 
 func (m *ZonedAPIUpdateFrontendRequest) UnmarshalJSON(b []byte) error {
@@ -4435,7 +4477,7 @@ type ZonedAPIUpdateHealthCheckRequest struct {
 	// Precisely one of TCPConfig, MysqlConfig, PgsqlConfig, LdapConfig, RedisConfig, HTTPConfig, HTTPSConfig must be set.
 	TCPConfig *HealthCheckTCPConfig `json:"tcp_config,omitempty"`
 
-	// MysqlConfig: object to configure a MySQL health check. The check requires MySQL >=3.22, for older versions, use a TCP health check.
+	// MysqlConfig: object to configure a MySQL health check. The check requires MySQL >=3.22 or <9.0. For older or newer versions, use a TCP health check.
 	// Precisely one of TCPConfig, MysqlConfig, PgsqlConfig, LdapConfig, RedisConfig, HTTPConfig, HTTPSConfig must be set.
 	MysqlConfig *HealthCheckMysqlConfig `json:"mysql_config,omitempty"`
 
@@ -4581,6 +4623,7 @@ func NewZonedAPI(client *scw.Client) *ZonedAPI {
 		client: client,
 	}
 }
+
 func (s *ZonedAPI) Zones() []scw.Zone {
 	return []scw.Zone{scw.ZoneFrPar1, scw.ZoneFrPar2, scw.ZoneNlAms1, scw.ZoneNlAms2, scw.ZoneNlAms3, scw.ZonePlWaw1, scw.ZonePlWaw2, scw.ZonePlWaw3}
 }
@@ -4702,6 +4745,58 @@ func (s *ZonedAPI) GetLB(req *ZonedAPIGetLBRequest, opts ...scw.RequestOption) (
 		return nil, err
 	}
 	return &resp, nil
+}
+
+// WaitForLBRequest is used by WaitForLB method.
+type WaitForLBRequest struct {
+	Zone          scw.Zone
+	LBID          string
+	Timeout       *time.Duration
+	RetryInterval *time.Duration
+}
+
+// WaitForLB waits for the LB to reach a terminal state.
+func (s *ZonedAPI) WaitForLB(req *WaitForLBRequest, opts ...scw.RequestOption) (*LB, error) {
+	timeout := defaultLBTimeout
+	if req.Timeout != nil {
+		timeout = *req.Timeout
+	}
+
+	retryInterval := defaultLBRetryInterval
+	if req.RetryInterval != nil {
+		retryInterval = *req.RetryInterval
+	}
+	transientStatuses := map[LBStatus]struct{}{
+		LBStatusPending:   {},
+		LBStatusMigrating: {},
+		LBStatusToCreate:  {},
+		LBStatusCreating:  {},
+		LBStatusToDelete:  {},
+		LBStatusDeleting:  {},
+	}
+
+	res, err := async.WaitSync(&async.WaitSyncConfig{
+		Get: func() (any, bool, error) {
+			res, err := s.GetLB(&ZonedAPIGetLBRequest{
+				Zone: req.Zone,
+				LBID: req.LBID,
+			}, opts...)
+			if err != nil {
+				return nil, false, err
+			}
+
+			_, isTransient := transientStatuses[res.Status]
+
+			return res, !isTransient, nil
+		},
+		IntervalStrategy: async.LinearIntervalStrategy(retryInterval),
+		Timeout:          timeout,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "waiting for LB failed")
+	}
+
+	return res.(*LB), nil
 }
 
 // UpdateLB: Update the parameters of an existing Load Balancer, specified by its Load Balancer ID. Note that the request type is PUT and not PATCH. You must set all parameters.
@@ -6064,6 +6159,53 @@ func (s *ZonedAPI) GetCertificate(req *ZonedAPIGetCertificateRequest, opts ...sc
 	return &resp, nil
 }
 
+// WaitForCertificateRequest is used by WaitForCertificate method.
+type WaitForCertificateRequest struct {
+	Zone          scw.Zone
+	CertificateID string
+	Timeout       *time.Duration
+	RetryInterval *time.Duration
+}
+
+// WaitForCertificate waits for the Certificate to reach a terminal state.
+func (s *ZonedAPI) WaitForCertificate(req *WaitForCertificateRequest, opts ...scw.RequestOption) (*Certificate, error) {
+	timeout := defaultLBTimeout
+	if req.Timeout != nil {
+		timeout = *req.Timeout
+	}
+
+	retryInterval := defaultLBRetryInterval
+	if req.RetryInterval != nil {
+		retryInterval = *req.RetryInterval
+	}
+	transientStatuses := map[CertificateStatus]struct{}{
+		CertificateStatusPending: {},
+	}
+
+	res, err := async.WaitSync(&async.WaitSyncConfig{
+		Get: func() (any, bool, error) {
+			res, err := s.GetCertificate(&ZonedAPIGetCertificateRequest{
+				Zone:          req.Zone,
+				CertificateID: req.CertificateID,
+			}, opts...)
+			if err != nil {
+				return nil, false, err
+			}
+
+			_, isTransient := transientStatuses[res.Status]
+
+			return res, !isTransient, nil
+		},
+		IntervalStrategy: async.LinearIntervalStrategy(retryInterval),
+		Timeout:          timeout,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "waiting for Certificate failed")
+	}
+
+	return res.(*Certificate), nil
+}
+
 // UpdateCertificate: Update the name of a particular SSL/TLS certificate, specified by its certificate ID.
 func (s *ZonedAPI) UpdateCertificate(req *ZonedAPIUpdateCertificateRequest, opts ...scw.RequestOption) (*Certificate, error) {
 	var err error
@@ -6471,13 +6613,9 @@ func (s *ZonedAPI) AttachPrivateNetwork(req *ZonedAPIAttachPrivateNetworkRequest
 		return nil, errors.New("field LBID cannot be empty in request")
 	}
 
-	if fmt.Sprint(req.PrivateNetworkID) == "" {
-		return nil, errors.New("field PrivateNetworkID cannot be empty in request")
-	}
-
 	scwReq := &scw.ScalewayRequest{
 		Method: "POST",
-		Path:   "/lb/v1/zones/" + fmt.Sprint(req.Zone) + "/lbs/" + fmt.Sprint(req.LBID) + "/private-networks/" + fmt.Sprint(req.PrivateNetworkID) + "/attach",
+		Path:   "/lb/v1/zones/" + fmt.Sprint(req.Zone) + "/lbs/" + fmt.Sprint(req.LBID) + "/attach-private-network",
 	}
 
 	err = scwReq.SetBody(req)
@@ -6511,13 +6649,9 @@ func (s *ZonedAPI) DetachPrivateNetwork(req *ZonedAPIDetachPrivateNetworkRequest
 		return errors.New("field LBID cannot be empty in request")
 	}
 
-	if fmt.Sprint(req.PrivateNetworkID) == "" {
-		return errors.New("field PrivateNetworkID cannot be empty in request")
-	}
-
 	scwReq := &scw.ScalewayRequest{
 		Method: "POST",
-		Path:   "/lb/v1/zones/" + fmt.Sprint(req.Zone) + "/lbs/" + fmt.Sprint(req.LBID) + "/private-networks/" + fmt.Sprint(req.PrivateNetworkID) + "/detach",
+		Path:   "/lb/v1/zones/" + fmt.Sprint(req.Zone) + "/lbs/" + fmt.Sprint(req.LBID) + "/detach-private-network",
 	}
 
 	err = scwReq.SetBody(req)
@@ -6543,6 +6677,7 @@ func NewAPI(client *scw.Client) *API {
 		client: client,
 	}
 }
+
 func (s *API) Regions() []scw.Region {
 	return []scw.Region{scw.RegionFrPar, scw.RegionNlAms, scw.RegionPlWaw}
 }

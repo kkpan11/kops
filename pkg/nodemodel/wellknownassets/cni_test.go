@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	api "k8s.io/kops/pkg/apis/kops"
+	kopsmodel "k8s.io/kops/pkg/apis/kops/model"
 	"k8s.io/kops/pkg/assets"
 	"k8s.io/kops/util/pkg/architectures"
 	"k8s.io/kops/util/pkg/vfs"
@@ -35,8 +36,16 @@ func Test_FindCNIAssetFromEnvironmentVariable(t *testing.T) {
 	cluster := &api.Cluster{}
 	cluster.Spec.KubernetesVersion = "v1.18.0"
 
-	assetBuilder := assets.NewAssetBuilder(vfs.Context, cluster.Spec.Assets, cluster.Spec.KubernetesVersion, false)
-	asset, err := FindCNIAssets(cluster, assetBuilder, architectures.ArchitectureAmd64)
+	ig := &api.InstanceGroup{}
+
+	assetBuilder := assets.NewAssetBuilder(vfs.Context, cluster.Spec.Assets, false)
+
+	igModel, err := kopsmodel.ForInstanceGroup(cluster, ig)
+	if err != nil {
+		t.Fatalf("building instance group model: %v", err)
+	}
+
+	asset, err := FindCNIAssets(igModel, assetBuilder, architectures.ArchitectureAmd64)
 	if err != nil {
 		t.Fatalf("Unable to parse CNI version: %v", err)
 	}
@@ -50,15 +59,23 @@ func Test_FindCNIAssetFromEnvironmentVariable(t *testing.T) {
 	}
 }
 
-func Test_FindCNIAssetFromDefaults122(t *testing.T) {
-	desiredCNIVersionURL := "https://storage.googleapis.com/k8s-artifacts-cni/release/v0.9.1/cni-plugins-linux-amd64-v0.9.1.tgz"
-	desiredCNIVersionHash := "sha256:962100bbc4baeaaa5748cdbfce941f756b1531c2eadb290129401498bfac21e7"
+func Test_FindCNIAssetFromDefaults134(t *testing.T) {
+	desiredCNIVersionURL := "https://github.com/containernetworking/plugins/releases/download/v1.7.1/cni-plugins-linux-amd64-v1.7.1.tgz"
+	desiredCNIVersionHash := "sha256:1a28a0506bfe5bcdc981caf1a49eeab7e72da8321f1119b7be85f22621013098"
 
 	cluster := &api.Cluster{}
-	cluster.Spec.KubernetesVersion = "v1.22.0"
+	cluster.Spec.KubernetesVersion = "v1.34.0"
 
-	assetBuilder := assets.NewAssetBuilder(vfs.Context, cluster.Spec.Assets, cluster.Spec.KubernetesVersion, false)
-	asset, err := FindCNIAssets(cluster, assetBuilder, architectures.ArchitectureAmd64)
+	ig := &api.InstanceGroup{}
+
+	igModel, err := kopsmodel.ForInstanceGroup(cluster, ig)
+	if err != nil {
+		t.Fatalf("building instance group model: %v", err)
+	}
+
+	assetBuilder := assets.NewAssetBuilder(vfs.Context, cluster.Spec.Assets, false)
+
+	asset, err := FindCNIAssets(igModel, assetBuilder, architectures.ArchitectureAmd64)
 	if err != nil {
 		t.Fatalf("Unable to parse CNI version: %s", err)
 	}

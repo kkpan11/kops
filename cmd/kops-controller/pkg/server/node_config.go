@@ -18,34 +18,81 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/klog/v2"
+	"k8s.io/kops/pkg/apis/kops"
+	kopsvalidation "k8s.io/kops/pkg/apis/kops/validation"
 	"k8s.io/kops/pkg/apis/nodeup"
 	"k8s.io/kops/pkg/bootstrap"
+	"k8s.io/kops/pkg/commands"
+	"k8s.io/kops/pkg/nodeidentity/clusterapi"
 )
 
 func (s *Server) getNodeConfig(ctx context.Context, req *nodeup.BootstrapRequest, identity *bootstrap.VerifyResult) (*nodeup.NodeConfig, error) {
-	klog.Infof("getting node config for %+v", req)
+	log := klog.FromContext(ctx)
+
+	if identity == nil {
+		return nil, fmt.Errorf("node identity is required")
+	}
+
+	log.Info("getting node config", "req", req, "identity", identity)
 
 	instanceGroupName := identity.InstanceGroupName
 	if instanceGroupName == "" {
-		return nil, fmt.Errorf("did not find InstanceGroup for node %q", identity.NodeName)
+		if identity.CAPIMachine == nil {
+			return nil, fmt.Errorf("did not find owner for node %q", identity.NodeName)
+		}
+		// CAPI path: the InstanceGroup is synthesized from the Machine and
+		// the name never reaches the configBase path, so we don't validate it.
+	} else if errs := kopsvalidation.ValidateInstanceGroupName(instanceGroupName, field.NewPath("instanceGroupName")); len(errs) > 0 {
+		return nil, fmt.Errorf("invalid InstanceGroup name: %v", errs.ToAggregate())
 	}
 
-	nodeConfig := &nodeup.NodeConfig{}
+	var nodeConfig *nodeup.NodeConfig
 
-	// Note: For now, we're assuming there is only a single cluster, and it is ours.
-	// We therefore use the configured base path
+	configBuilder := &commands.ConfigBuilder{
+		Clientset:   s.clientset,
+		ClusterName: s.opt.ClusterName,
+	}
 
-	{
+	if identity.CAPIMachine != nil && instanceGroupName == "" {
+		// We have a CAPI Machine (but no instance group)
+		instanceGroup, err := s.buildInstanceGroupFromCAPI(ctx, identity.CAPIMachine)
+		if err != nil {
+			return nil, fmt.Errorf("error building InstanceGroup from CAPI Machine: %w", err)
+		}
+		log.Info("built InstanceGroup from CAPI Machine", "instanceGroup", instanceGroup)
+		configBuilder.InstanceGroup = instanceGroup
+	} else if s.opt.Cloud == "metal" {
+		configBuilder.InstanceGroupName = instanceGroupName
+	} else {
+		// Note: For now, we're assuming there is only a single cluster, and it is ours.
+		// We therefore use the configured base path
+
 		p := s.configBase.Join("igconfig", "node", instanceGroupName, "nodeupconfig.yaml")
 
 		b, err := p.ReadFile(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("error loading NodeupConfig %q: %v", p, err)
 		}
+		nodeConfig = &nodeup.NodeConfig{}
 		nodeConfig.NodeupConfig = string(b)
+	}
+
+	if nodeConfig == nil {
+		bootstrapData, err := configBuilder.GetBootstrapData(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("building nodeConfig for instanceGroup: %w", err)
+		}
+		nodeupConfig, err := json.Marshal(bootstrapData.NodeupConfig)
+		if err != nil {
+			return nil, fmt.Errorf("marshalling nodeupConfig: %w", err)
+		}
+		nodeConfig = &nodeup.NodeConfig{}
+		nodeConfig.NodeupConfig = string(nodeupConfig)
 	}
 
 	{
@@ -65,4 +112,39 @@ func (s *Server) getNodeConfig(ctx context.Context, req *nodeup.BootstrapRequest
 	}
 
 	return nodeConfig, nil
+}
+
+// buildInstanceGroupFromCAPI builds an InstanceGroup from a CAPI Machine, for building bootstrap data.
+// It builds a minimal instanceGroup, because many fields (e.g. image, machineType, minSize, maxSize)
+// are not relevant for building the bootstrap data.
+func (s *Server) buildInstanceGroupFromCAPI(ctx context.Context, capiMachine *clusterapi.Machine) (*kops.InstanceGroup, error) {
+	log := klog.FromContext(ctx)
+
+	capiDeploymentName := capiMachine.GetDeploymentName()
+	if capiDeploymentName == "" {
+		return nil, fmt.Errorf("CAPI Machine is missing cluster.x-k8s.io/deployment-name label")
+	}
+	failureDomain := capiMachine.GetFailureDomain()
+	if failureDomain == "" {
+		return nil, fmt.Errorf("CAPI Machine is missing spec.failureDomain")
+	}
+
+	ig := &kops.InstanceGroup{}
+	ig.Labels = map[string]string{
+		// kops.LabelClusterName: cluster.Name, // Should not matter
+	}
+	ig.Name = capiDeploymentName
+
+	// "maxSize": 1, // Should not matter
+	// "minSize": 1, // Should not matter
+	// "machineType": "", // Should not matter
+	// "subnets": // Should not matter
+	ig.Spec.Zones = []string{failureDomain}
+	ig.Spec.Role = "Node" // TODO: Support other roles?
+	// The machine image is chosen by the CAPI infrastructure provider and is not used for
+	// nodeup config generation; the placeholder avoids resolving a default from the channel.
+	ig.Spec.Image = "placeholder-image"
+
+	log.Info("built InstanceGroup from CAPI Machine", "instanceGroup", ig)
+	return ig, nil
 }

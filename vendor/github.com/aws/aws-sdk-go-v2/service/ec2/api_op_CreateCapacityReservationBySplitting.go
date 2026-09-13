@@ -5,18 +5,15 @@ package ec2
 import (
 	"context"
 	"fmt"
-	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/smithy-go/middleware"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
-//	Create a new Capacity Reservation by splitting the available capacity of the
+//	Create a new Capacity Reservation by splitting the capacity of the source
 //
-// source Capacity Reservation. The new Capacity Reservation will have the same
-// attributes as the source Capacity Reservation except for tags. The source
-// Capacity Reservation must be active and owned by your Amazon Web Services
-// account.
+// Capacity Reservation. The new Capacity Reservation will have the same attributes
+// as the source Capacity Reservation except for tags. The source Capacity
+// Reservation must be active and owned by your Amazon Web Services account.
 func (c *Client) CreateCapacityReservationBySplitting(ctx context.Context, params *CreateCapacityReservationBySplittingInput, optFns ...func(*Options)) (*CreateCapacityReservationBySplittingOutput, error) {
 	if params == nil {
 		params = &CreateCapacityReservationBySplittingInput{}
@@ -39,8 +36,7 @@ type CreateCapacityReservationBySplittingInput struct {
 	// This member is required.
 	InstanceCount *int32
 
-	//  The ID of the Capacity Reservation from which you want to split the available
-	// capacity.
+	//  The ID of the Capacity Reservation from which you want to split the capacity.
 	//
 	// This member is required.
 	SourceCapacityReservationId *string
@@ -82,9 +78,6 @@ type CreateCapacityReservationBySplittingOutput struct {
 }
 
 func (c *Client) addOperationCreateCapacityReservationBySplittingMiddlewares(stack *middleware.Stack, options Options) (err error) {
-	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
-		return err
-	}
 	err = stack.Serialize.Add(&awsEc2query_serializeOpCreateCapacityReservationBySplitting{}, middleware.After)
 	if err != nil {
 		return err
@@ -93,19 +86,7 @@ func (c *Client) addOperationCreateCapacityReservationBySplittingMiddlewares(sta
 	if err != nil {
 		return err
 	}
-	if err := addProtocolFinalizerMiddlewares(stack, options, "CreateCapacityReservationBySplitting"); err != nil {
-		return fmt.Errorf("add protocol finalizers: %v", err)
-	}
 
-	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
-		return err
-	}
-	if err = addSetLoggerMiddleware(stack, options); err != nil {
-		return err
-	}
-	if err = addClientRequestID(stack); err != nil {
-		return err
-	}
 	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
@@ -115,43 +96,16 @@ func (c *Client) addOperationCreateCapacityReservationBySplittingMiddlewares(sta
 	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetry(stack, options); err != nil {
+	if err = addRecordResponseTiming(stack, options); err != nil {
 		return err
 	}
-	if err = addRawResponseToMetadata(stack); err != nil {
-		return err
-	}
-	if err = addRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack, options); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addTimeOffsetBuild(stack, c); err != nil {
-		return err
-	}
-	if err = addUserAgentRetryMode(stack, options); err != nil {
+	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
 	if err = addIdempotencyToken_opCreateCapacityReservationBySplittingMiddleware(stack, options); err != nil {
 		return err
 	}
 	if err = addOpCreateCapacityReservationBySplittingValidationMiddleware(stack); err != nil {
-		return err
-	}
-	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opCreateCapacityReservationBySplitting(options.Region), middleware.Before); err != nil {
-		return err
-	}
-	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -164,6 +118,9 @@ func (c *Client) addOperationCreateCapacityReservationBySplittingMiddlewares(sta
 		return err
 	}
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
+	if err = addInterceptors(stack, options); err != nil {
 		return err
 	}
 	return nil
@@ -200,12 +157,4 @@ func (m *idempotencyToken_initializeOpCreateCapacityReservationBySplitting) Hand
 }
 func addIdempotencyToken_opCreateCapacityReservationBySplittingMiddleware(stack *middleware.Stack, cfg Options) error {
 	return stack.Initialize.Add(&idempotencyToken_initializeOpCreateCapacityReservationBySplitting{tokenProvider: cfg.IdempotencyTokenProvider}, middleware.Before)
-}
-
-func newServiceMetadataMiddleware_opCreateCapacityReservationBySplitting(region string) *awsmiddleware.RegisterServiceMetadata {
-	return &awsmiddleware.RegisterServiceMetadata{
-		Region:        region,
-		ServiceID:     ServiceID,
-		OperationName: "CreateCapacityReservationBySplitting",
-	}
 }

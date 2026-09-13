@@ -117,6 +117,52 @@ func (BurstablePerformance) Values() []BurstablePerformance {
 	}
 }
 
+type CapacityDistributionStrategy string
+
+// Enum values for CapacityDistributionStrategy
+const (
+	CapacityDistributionStrategyBalancedOnly             CapacityDistributionStrategy = "balanced-only"
+	CapacityDistributionStrategyBalancedBestEffort       CapacityDistributionStrategy = "balanced-best-effort"
+	CapacityDistributionStrategyReservationsThenBalanced CapacityDistributionStrategy = "reservations-then-balanced"
+)
+
+// Values returns all known values for CapacityDistributionStrategy. Note that
+// this can be expanded in the future, and so it is only as up to date as the
+// client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
+func (CapacityDistributionStrategy) Values() []CapacityDistributionStrategy {
+	return []CapacityDistributionStrategy{
+		"balanced-only",
+		"balanced-best-effort",
+		"reservations-then-balanced",
+	}
+}
+
+type CapacityReservationPreference string
+
+// Enum values for CapacityReservationPreference
+const (
+	CapacityReservationPreferenceCapacityReservationsOnly  CapacityReservationPreference = "capacity-reservations-only"
+	CapacityReservationPreferenceCapacityReservationsFirst CapacityReservationPreference = "capacity-reservations-first"
+	CapacityReservationPreferenceNone                      CapacityReservationPreference = "none"
+	CapacityReservationPreferenceDefault                   CapacityReservationPreference = "default"
+)
+
+// Values returns all known values for CapacityReservationPreference. Note that
+// this can be expanded in the future, and so it is only as up to date as the
+// client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
+func (CapacityReservationPreference) Values() []CapacityReservationPreference {
+	return []CapacityReservationPreference{
+		"capacity-reservations-only",
+		"capacity-reservations-first",
+		"none",
+		"default",
+	}
+}
+
 type CpuManufacturer string
 
 // Enum values for CpuManufacturer
@@ -124,6 +170,7 @@ const (
 	CpuManufacturerIntel             CpuManufacturer = "intel"
 	CpuManufacturerAmd               CpuManufacturer = "amd"
 	CpuManufacturerAmazonWebServices CpuManufacturer = "amazon-web-services"
+	CpuManufacturerApple             CpuManufacturer = "apple"
 )
 
 // Values returns all known values for CpuManufacturer. Note that this can be
@@ -135,6 +182,48 @@ func (CpuManufacturer) Values() []CpuManufacturer {
 		"intel",
 		"amd",
 		"amazon-web-services",
+		"apple",
+	}
+}
+
+type DeletionProtection string
+
+// Enum values for DeletionProtection
+const (
+	DeletionProtectionNone                 DeletionProtection = "none"
+	DeletionProtectionPreventForceDeletion DeletionProtection = "prevent-force-deletion"
+	DeletionProtectionPreventAllDeletion   DeletionProtection = "prevent-all-deletion"
+)
+
+// Values returns all known values for DeletionProtection. Note that this can be
+// expanded in the future, and so it is only as up to date as the client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
+func (DeletionProtection) Values() []DeletionProtection {
+	return []DeletionProtection{
+		"none",
+		"prevent-force-deletion",
+		"prevent-all-deletion",
+	}
+}
+
+type ImpairedZoneHealthCheckBehavior string
+
+// Enum values for ImpairedZoneHealthCheckBehavior
+const (
+	ImpairedZoneHealthCheckBehaviorReplaceUnhealthy ImpairedZoneHealthCheckBehavior = "ReplaceUnhealthy"
+	ImpairedZoneHealthCheckBehaviorIgnoreUnhealthy  ImpairedZoneHealthCheckBehavior = "IgnoreUnhealthy"
+)
+
+// Values returns all known values for ImpairedZoneHealthCheckBehavior. Note that
+// this can be expanded in the future, and so it is only as up to date as the
+// client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
+func (ImpairedZoneHealthCheckBehavior) Values() []ImpairedZoneHealthCheckBehavior {
+	return []ImpairedZoneHealthCheckBehavior{
+		"ReplaceUnhealthy",
+		"IgnoreUnhealthy",
 	}
 }
 
@@ -210,6 +299,7 @@ const (
 	InstanceRefreshStatusRollbackInProgress InstanceRefreshStatus = "RollbackInProgress"
 	InstanceRefreshStatusRollbackFailed     InstanceRefreshStatus = "RollbackFailed"
 	InstanceRefreshStatusRollbackSuccessful InstanceRefreshStatus = "RollbackSuccessful"
+	InstanceRefreshStatusBaking             InstanceRefreshStatus = "Baking"
 )
 
 // Values returns all known values for InstanceRefreshStatus. Note that this can
@@ -227,6 +317,7 @@ func (InstanceRefreshStatus) Values() []InstanceRefreshStatus {
 		"RollbackInProgress",
 		"RollbackFailed",
 		"RollbackSuccessful",
+		"Baking",
 	}
 }
 
@@ -234,29 +325,36 @@ type LifecycleState string
 
 // Enum values for LifecycleState
 const (
-	LifecycleStatePending                  LifecycleState = "Pending"
-	LifecycleStatePendingWait              LifecycleState = "Pending:Wait"
-	LifecycleStatePendingProceed           LifecycleState = "Pending:Proceed"
-	LifecycleStateQuarantined              LifecycleState = "Quarantined"
-	LifecycleStateInService                LifecycleState = "InService"
-	LifecycleStateTerminating              LifecycleState = "Terminating"
-	LifecycleStateTerminatingWait          LifecycleState = "Terminating:Wait"
-	LifecycleStateTerminatingProceed       LifecycleState = "Terminating:Proceed"
-	LifecycleStateTerminated               LifecycleState = "Terminated"
-	LifecycleStateDetaching                LifecycleState = "Detaching"
-	LifecycleStateDetached                 LifecycleState = "Detached"
-	LifecycleStateEnteringStandby          LifecycleState = "EnteringStandby"
-	LifecycleStateStandby                  LifecycleState = "Standby"
-	LifecycleStateWarmedPending            LifecycleState = "Warmed:Pending"
-	LifecycleStateWarmedPendingWait        LifecycleState = "Warmed:Pending:Wait"
-	LifecycleStateWarmedPendingProceed     LifecycleState = "Warmed:Pending:Proceed"
-	LifecycleStateWarmedTerminating        LifecycleState = "Warmed:Terminating"
-	LifecycleStateWarmedTerminatingWait    LifecycleState = "Warmed:Terminating:Wait"
-	LifecycleStateWarmedTerminatingProceed LifecycleState = "Warmed:Terminating:Proceed"
-	LifecycleStateWarmedTerminated         LifecycleState = "Warmed:Terminated"
-	LifecycleStateWarmedStopped            LifecycleState = "Warmed:Stopped"
-	LifecycleStateWarmedRunning            LifecycleState = "Warmed:Running"
-	LifecycleStateWarmedHibernated         LifecycleState = "Warmed:Hibernated"
+	LifecycleStatePending                    LifecycleState = "Pending"
+	LifecycleStatePendingWait                LifecycleState = "Pending:Wait"
+	LifecycleStatePendingProceed             LifecycleState = "Pending:Proceed"
+	LifecycleStateQuarantined                LifecycleState = "Quarantined"
+	LifecycleStateInService                  LifecycleState = "InService"
+	LifecycleStateTerminating                LifecycleState = "Terminating"
+	LifecycleStateTerminatingWait            LifecycleState = "Terminating:Wait"
+	LifecycleStateTerminatingProceed         LifecycleState = "Terminating:Proceed"
+	LifecycleStateTerminatingRetained        LifecycleState = "Terminating:Retained"
+	LifecycleStateTerminated                 LifecycleState = "Terminated"
+	LifecycleStateDetaching                  LifecycleState = "Detaching"
+	LifecycleStateDetached                   LifecycleState = "Detached"
+	LifecycleStateEnteringStandby            LifecycleState = "EnteringStandby"
+	LifecycleStateStandby                    LifecycleState = "Standby"
+	LifecycleStateReplacingRootVolume        LifecycleState = "ReplacingRootVolume"
+	LifecycleStateReplacingRootVolumeWait    LifecycleState = "ReplacingRootVolume:Wait"
+	LifecycleStateReplacingRootVolumeProceed LifecycleState = "ReplacingRootVolume:Proceed"
+	LifecycleStateRootVolumeReplaced         LifecycleState = "RootVolumeReplaced"
+	LifecycleStateWarmedPending              LifecycleState = "Warmed:Pending"
+	LifecycleStateWarmedPendingWait          LifecycleState = "Warmed:Pending:Wait"
+	LifecycleStateWarmedPendingProceed       LifecycleState = "Warmed:Pending:Proceed"
+	LifecycleStateWarmedPendingRetained      LifecycleState = "Warmed:Pending:Retained"
+	LifecycleStateWarmedTerminating          LifecycleState = "Warmed:Terminating"
+	LifecycleStateWarmedTerminatingWait      LifecycleState = "Warmed:Terminating:Wait"
+	LifecycleStateWarmedTerminatingProceed   LifecycleState = "Warmed:Terminating:Proceed"
+	LifecycleStateWarmedTerminatingRetained  LifecycleState = "Warmed:Terminating:Retained"
+	LifecycleStateWarmedTerminated           LifecycleState = "Warmed:Terminated"
+	LifecycleStateWarmedStopped              LifecycleState = "Warmed:Stopped"
+	LifecycleStateWarmedRunning              LifecycleState = "Warmed:Running"
+	LifecycleStateWarmedHibernated           LifecycleState = "Warmed:Hibernated"
 )
 
 // Values returns all known values for LifecycleState. Note that this can be
@@ -273,17 +371,24 @@ func (LifecycleState) Values() []LifecycleState {
 		"Terminating",
 		"Terminating:Wait",
 		"Terminating:Proceed",
+		"Terminating:Retained",
 		"Terminated",
 		"Detaching",
 		"Detached",
 		"EnteringStandby",
 		"Standby",
+		"ReplacingRootVolume",
+		"ReplacingRootVolume:Wait",
+		"ReplacingRootVolume:Proceed",
+		"RootVolumeReplaced",
 		"Warmed:Pending",
 		"Warmed:Pending:Wait",
 		"Warmed:Pending:Proceed",
+		"Warmed:Pending:Retained",
 		"Warmed:Terminating",
 		"Warmed:Terminating:Wait",
 		"Warmed:Terminating:Proceed",
+		"Warmed:Terminating:Retained",
 		"Warmed:Terminated",
 		"Warmed:Stopped",
 		"Warmed:Running",
@@ -491,7 +596,8 @@ type RefreshStrategy string
 
 // Enum values for RefreshStrategy
 const (
-	RefreshStrategyRolling RefreshStrategy = "Rolling"
+	RefreshStrategyRolling           RefreshStrategy = "Rolling"
+	RefreshStrategyReplaceRootVolume RefreshStrategy = "ReplaceRootVolume"
 )
 
 // Values returns all known values for RefreshStrategy. Note that this can be
@@ -501,6 +607,45 @@ const (
 func (RefreshStrategy) Values() []RefreshStrategy {
 	return []RefreshStrategy{
 		"Rolling",
+		"ReplaceRootVolume",
+	}
+}
+
+type RetentionAction string
+
+// Enum values for RetentionAction
+const (
+	RetentionActionRetain    RetentionAction = "retain"
+	RetentionActionTerminate RetentionAction = "terminate"
+)
+
+// Values returns all known values for RetentionAction. Note that this can be
+// expanded in the future, and so it is only as up to date as the client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
+func (RetentionAction) Values() []RetentionAction {
+	return []RetentionAction{
+		"retain",
+		"terminate",
+	}
+}
+
+type RetryStrategy string
+
+// Enum values for RetryStrategy
+const (
+	RetryStrategyRetryWithGroupConfiguration RetryStrategy = "retry-with-group-configuration"
+	RetryStrategyNone                        RetryStrategy = "none"
+)
+
+// Values returns all known values for RetryStrategy. Note that this can be
+// expanded in the future, and so it is only as up to date as the client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
+func (RetryStrategy) Values() []RetryStrategy {
+	return []RetryStrategy{
+		"retry-with-group-configuration",
+		"none",
 	}
 }
 
@@ -529,19 +674,22 @@ type ScalingActivityStatusCode string
 
 // Enum values for ScalingActivityStatusCode
 const (
-	ScalingActivityStatusCodePendingSpotBidPlacement         ScalingActivityStatusCode = "PendingSpotBidPlacement"
-	ScalingActivityStatusCodeWaitingForSpotInstanceRequestId ScalingActivityStatusCode = "WaitingForSpotInstanceRequestId"
-	ScalingActivityStatusCodeWaitingForSpotInstanceId        ScalingActivityStatusCode = "WaitingForSpotInstanceId"
-	ScalingActivityStatusCodeWaitingForInstanceId            ScalingActivityStatusCode = "WaitingForInstanceId"
-	ScalingActivityStatusCodePreInService                    ScalingActivityStatusCode = "PreInService"
-	ScalingActivityStatusCodeInProgress                      ScalingActivityStatusCode = "InProgress"
-	ScalingActivityStatusCodeWaitingForELBConnectionDraining ScalingActivityStatusCode = "WaitingForELBConnectionDraining"
-	ScalingActivityStatusCodeMidLifecycleAction              ScalingActivityStatusCode = "MidLifecycleAction"
-	ScalingActivityStatusCodeWaitingForInstanceWarmup        ScalingActivityStatusCode = "WaitingForInstanceWarmup"
-	ScalingActivityStatusCodeSuccessful                      ScalingActivityStatusCode = "Successful"
-	ScalingActivityStatusCodeFailed                          ScalingActivityStatusCode = "Failed"
-	ScalingActivityStatusCodeCancelled                       ScalingActivityStatusCode = "Cancelled"
-	ScalingActivityStatusCodeWaitingForConnectionDraining    ScalingActivityStatusCode = "WaitingForConnectionDraining"
+	ScalingActivityStatusCodePendingSpotBidPlacement           ScalingActivityStatusCode = "PendingSpotBidPlacement"
+	ScalingActivityStatusCodeWaitingForSpotInstanceRequestId   ScalingActivityStatusCode = "WaitingForSpotInstanceRequestId"
+	ScalingActivityStatusCodeWaitingForSpotInstanceId          ScalingActivityStatusCode = "WaitingForSpotInstanceId"
+	ScalingActivityStatusCodeWaitingForInstanceId              ScalingActivityStatusCode = "WaitingForInstanceId"
+	ScalingActivityStatusCodePreInService                      ScalingActivityStatusCode = "PreInService"
+	ScalingActivityStatusCodeInProgress                        ScalingActivityStatusCode = "InProgress"
+	ScalingActivityStatusCodeWaitingForELBConnectionDraining   ScalingActivityStatusCode = "WaitingForELBConnectionDraining"
+	ScalingActivityStatusCodeMidLifecycleAction                ScalingActivityStatusCode = "MidLifecycleAction"
+	ScalingActivityStatusCodeWaitingForInstanceWarmup          ScalingActivityStatusCode = "WaitingForInstanceWarmup"
+	ScalingActivityStatusCodeSuccessful                        ScalingActivityStatusCode = "Successful"
+	ScalingActivityStatusCodeFailed                            ScalingActivityStatusCode = "Failed"
+	ScalingActivityStatusCodeCancelled                         ScalingActivityStatusCode = "Cancelled"
+	ScalingActivityStatusCodeWaitingForConnectionDraining      ScalingActivityStatusCode = "WaitingForConnectionDraining"
+	ScalingActivityStatusCodeWaitingForInPlaceUpdateToStart    ScalingActivityStatusCode = "WaitingForInPlaceUpdateToStart"
+	ScalingActivityStatusCodeWaitingForInPlaceUpdateToFinalize ScalingActivityStatusCode = "WaitingForInPlaceUpdateToFinalize"
+	ScalingActivityStatusCodeInPlaceUpdateInProgress           ScalingActivityStatusCode = "InPlaceUpdateInProgress"
 )
 
 // Values returns all known values for ScalingActivityStatusCode. Note that this
@@ -563,6 +711,9 @@ func (ScalingActivityStatusCode) Values() []ScalingActivityStatusCode {
 		"Failed",
 		"Cancelled",
 		"WaitingForConnectionDraining",
+		"WaitingForInPlaceUpdateToStart",
+		"WaitingForInPlaceUpdateToFinalize",
+		"InPlaceUpdateInProgress",
 	}
 }
 

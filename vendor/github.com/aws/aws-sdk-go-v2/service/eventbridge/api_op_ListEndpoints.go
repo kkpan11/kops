@@ -4,11 +4,8 @@ package eventbridge
 
 import (
 	"context"
-	"fmt"
-	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/service/eventbridge/types"
 	"github.com/aws/smithy-go/middleware"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
 // List the global endpoints associated with this account. For more information
@@ -44,11 +41,14 @@ type ListEndpointsInput struct {
 	// in the name.
 	NamePrefix *string
 
-	// If nextToken is returned, there are more results available. The value of
-	// nextToken is a unique pagination token for each page. Make the call again using
-	// the returned token to retrieve the next page. Keep all other arguments
-	// unchanged. Each pagination token expires after 24 hours. Using an expired
-	// pagination token will return an HTTP 400 InvalidToken error.
+	// The token returned by a previous call, which you can use to retrieve the next
+	// set of results.
+	//
+	// The value of nextToken is a unique pagination token for each page. To retrieve
+	// the next page of results, make the call again using the returned token. Keep all
+	// other arguments unchanged.
+	//
+	// Using an expired pagination token results in an HTTP 400 InvalidToken error.
 	NextToken *string
 
 	noSmithyDocumentSerde
@@ -59,11 +59,14 @@ type ListEndpointsOutput struct {
 	// The endpoints returned by the call.
 	Endpoints []types.Endpoint
 
-	// If nextToken is returned, there are more results available. The value of
-	// nextToken is a unique pagination token for each page. Make the call again using
-	// the returned token to retrieve the next page. Keep all other arguments
-	// unchanged. Each pagination token expires after 24 hours. Using an expired
-	// pagination token will return an HTTP 400 InvalidToken error.
+	// A token indicating there are more results available. If there are no more
+	// results, no token is included in the response.
+	//
+	// The value of nextToken is a unique pagination token for each page. To retrieve
+	// the next page of results, make the call again using the returned token. Keep all
+	// other arguments unchanged.
+	//
+	// Using an expired pagination token results in an HTTP 400 InvalidToken error.
 	NextToken *string
 
 	// Metadata pertaining to the operation's result.
@@ -73,9 +76,6 @@ type ListEndpointsOutput struct {
 }
 
 func (c *Client) addOperationListEndpointsMiddlewares(stack *middleware.Stack, options Options) (err error) {
-	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
-		return err
-	}
 	err = stack.Serialize.Add(&awsAwsjson11_serializeOpListEndpoints{}, middleware.After)
 	if err != nil {
 		return err
@@ -84,19 +84,7 @@ func (c *Client) addOperationListEndpointsMiddlewares(stack *middleware.Stack, o
 	if err != nil {
 		return err
 	}
-	if err := addProtocolFinalizerMiddlewares(stack, options, "ListEndpoints"); err != nil {
-		return fmt.Errorf("add protocol finalizers: %v", err)
-	}
 
-	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
-		return err
-	}
-	if err = addSetLoggerMiddleware(stack, options); err != nil {
-		return err
-	}
-	if err = addClientRequestID(stack); err != nil {
-		return err
-	}
 	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
@@ -106,37 +94,10 @@ func (c *Client) addOperationListEndpointsMiddlewares(stack *middleware.Stack, o
 	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetry(stack, options); err != nil {
+	if err = addRecordResponseTiming(stack, options); err != nil {
 		return err
 	}
-	if err = addRawResponseToMetadata(stack); err != nil {
-		return err
-	}
-	if err = addRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack, options); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addTimeOffsetBuild(stack, c); err != nil {
-		return err
-	}
-	if err = addUserAgentRetryMode(stack, options); err != nil {
-		return err
-	}
-	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opListEndpoints(options.Region), middleware.Before); err != nil {
-		return err
-	}
-	if err = addRecursionDetection(stack); err != nil {
+	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -151,13 +112,8 @@ func (c *Client) addOperationListEndpointsMiddlewares(stack *middleware.Stack, o
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
-	return nil
-}
-
-func newServiceMetadataMiddleware_opListEndpoints(region string) *awsmiddleware.RegisterServiceMetadata {
-	return &awsmiddleware.RegisterServiceMetadata{
-		Region:        region,
-		ServiceID:     ServiceID,
-		OperationName: "ListEndpoints",
+	if err = addInterceptors(stack, options); err != nil {
+		return err
 	}
+	return nil
 }

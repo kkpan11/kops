@@ -26,6 +26,7 @@ import (
 	"k8s.io/kops/pkg/apis/kops"
 	"k8s.io/kops/pkg/apis/kops/v1alpha2"
 	"k8s.io/kops/pkg/kopscodecs"
+	"k8s.io/kops/pkg/pki"
 	"k8s.io/kops/util/pkg/vfs"
 )
 
@@ -36,7 +37,7 @@ type VFSKeystoreReader struct {
 	cachedCA *Keyset
 }
 
-var _ KeystoreReader = &VFSKeystoreReader{}
+var _ KeystoreReader = (*VFSKeystoreReader)(nil)
 
 func NewVFSKeystoreReader(basedir vfs.Path) *VFSKeystoreReader {
 	k := &VFSKeystoreReader{
@@ -54,24 +55,20 @@ func (c *VFSKeystoreReader) buildPrivateKeyPoolPath(name string) vfs.Path {
 	return c.basedir.Join("private", name)
 }
 
-func (c *VFSKeystoreReader) parseKeysetYaml(data []byte) (*kops.Keyset, bool, error) {
+func (c *VFSKeystoreReader) parseKeysetYaml(data []byte) (*kops.Keyset, error) {
 	defaultReadVersion := v1alpha2.SchemeGroupVersion.WithKind("Keyset")
 
-	object, gvk, err := kopscodecs.Decode(data, &defaultReadVersion)
+	object, _, err := kopscodecs.Decode(data, &defaultReadVersion)
 	if err != nil {
-		return nil, false, fmt.Errorf("error parsing keyset: %v", err)
+		return nil, fmt.Errorf("error parsing keyset: %v", err)
 	}
 
 	keyset, ok := object.(*kops.Keyset)
 	if !ok {
-		return nil, false, fmt.Errorf("object was not a keyset, was a %T", object)
+		return nil, fmt.Errorf("object was not a keyset, was a %T", object)
 	}
 
-	if gvk == nil {
-		return nil, false, fmt.Errorf("object did not have GroupVersionKind: %q", keyset.Name)
-	}
-
-	return keyset, gvk.Version != keysetFormatLatest, nil
+	return keyset, nil
 }
 
 // loadKeyset loads a Keyset from the path.
@@ -87,7 +84,7 @@ func (c *VFSKeystoreReader) loadKeyset(ctx context.Context, p vfs.Path) (*Keyset
 		return nil, fmt.Errorf("unable to read bundle %q: %v", p, err)
 	}
 
-	o, legacyFormat, err := c.parseKeysetYaml(data)
+	o, err := c.parseKeysetYaml(data)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing bundle %q: %v", p, err)
 	}
@@ -97,32 +94,29 @@ func (c *VFSKeystoreReader) loadKeyset(ctx context.Context, p vfs.Path) (*Keyset
 		return nil, fmt.Errorf("error mapping bundle %q: %v", p, err)
 	}
 
-	keyset.LegacyFormat = legacyFormat
 	return keyset, nil
 }
 
-var legacyKeysetMappings = map[string]string{
-	// The strange name is because kOps prior to 1.19 used the api-server TLS key for this.
-	"service-account": "master",
-	// Renamed in kOps 1.22
-	"kubernetes-ca": "ca",
+// FindPrimaryKeypair implements pki.Keystore
+func (c *VFSKeystoreReader) FindPrimaryKeypair(ctx context.Context, name string) (*pki.Certificate, *pki.PrivateKey, error) {
+	keyset, err := c.FindKeyset(ctx, name)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if keyset == nil {
+		return nil, nil, nil
+	}
+	if keyset.Primary == nil {
+		return nil, nil, nil
+	}
+	if keyset.Primary.Certificate == nil {
+		return nil, nil, nil
+	}
+	return keyset.Primary.Certificate, keyset.Primary.PrivateKey, nil
 }
 
 func (c *VFSKeystoreReader) FindKeyset(ctx context.Context, id string) (*Keyset, error) {
-	keys, err := c.findPrivateKeyset(ctx, id)
-	if keys == nil || os.IsNotExist(err) {
-		if legacyId := legacyKeysetMappings[id]; legacyId != "" {
-			keys, err = c.findPrivateKeyset(ctx, legacyId)
-			if keys != nil {
-				keys.LegacyFormat = true
-			}
-		}
-	}
-
-	return keys, err
-}
-
-func (c *VFSKeystoreReader) findPrivateKeyset(ctx context.Context, id string) (*Keyset, error) {
 	var keys *Keyset
 	var err error
 	if id == CertificateIDCA {

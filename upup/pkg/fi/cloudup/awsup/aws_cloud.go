@@ -63,7 +63,7 @@ import (
 	"k8s.io/kops/util/pkg/awsinterfaces"
 )
 
-// By default, aws-sdk-go only retries 3 times, which doesn't give
+// By default, aws-sdk-go-v2 only retries 3 times, which doesn't give
 // much time for exponential backoff to work for serious issues. At 13
 // retries, we'll try a given request for up to ~6m with exponential
 // backoff along the way.
@@ -102,14 +102,21 @@ const TagNameKopsRole = "kubernetes.io/kops/role"
 // TagNameClusterOwnershipPrefix is the AWS tag used for ownership
 const TagNameClusterOwnershipPrefix = "kubernetes.io/cluster/"
 
+// TagNameSubnetInternalELB is the well-known subnet tag that designates a subnet for internal load balancers.
+const TagNameSubnetInternalELB = "kubernetes.io/role/internal-elb"
+
+// TagNameSubnetPublicELB is the well-known subnet tag that designates a subnet for public load balancers.
+const TagNameSubnetPublicELB = "kubernetes.io/role/elb"
+
 const tagNameDetachedInstance = "kops.k8s.io/detached-from-asg"
 
 const (
-	WellKnownAccountAmazonLinux2 = "137112412989"
-	WellKnownAccountDebian       = "136693071363"
-	WellKnownAccountFlatcar      = "075585003325"
-	WellKnownAccountRedhat       = "309956199498"
-	WellKnownAccountUbuntu       = "099720109477"
+	WellKnownAccountAmazonLinux2023 = "137112412989"
+	WellKnownAccountDebian          = "136693071363"
+	WellKnownAccountFlatcar         = "075585003325"
+	WellKnownAccountRedhat          = "309956199498"
+	WellKnownAccountUbuntu          = "099720109477"
+	WellKnownAccountRockyLinux      = "792107900819"
 )
 
 const instanceInServiceState = "InService"
@@ -146,17 +153,10 @@ type AWSCloud interface {
 	// UpdateTags will update tags of the specified resource to match tags, using getTags(), createTags() and deleteTags()
 	UpdateTags(resourceId string, tags map[string]string) error
 	AddAWSTags(id string, expected map[string]string) error
-	GetELBTags(loadBalancerName string) (map[string]string, error)
 	GetELBV2Tags(ResourceArn string) (map[string]string, error)
 
-	// CreateELBTags will add tags to the specified loadBalancer, retrying up to MaxCreateTagsAttempts times if it hits an eventual-consistency type error
-	CreateELBTags(loadBalancerName string, tags map[string]string) error
 	CreateELBV2Tags(ResourceArn string, tags map[string]string) error
-	// RemoveELBTags will remove tags from the specified loadBalancer, retrying up to MaxCreateTagsAttempts times if it hits an eventual-consistency type error
-	RemoveELBTags(loadBalancerName string, tags map[string]string) error
 	RemoveELBV2Tags(ResourceArn string, tags map[string]string) error
-	FindELBByNameTag(findNameTag string) (*elbtypes.LoadBalancerDescription, error)
-	DescribeELBTags(loadBalancerNames []string) (map[string][]elbtypes.Tag, error)
 	// TODO: Remove, replace with awsup.ListELBV2LoadBalancers
 	DescribeELBV2Tags(loadBalancerNames []string) (map[string][]elbv2types.Tag, error)
 	FindELBV2NetworkInterfacesByName(vpcID string, loadBalancerName string) ([]ec2types.NetworkInterface, error)
@@ -226,7 +226,7 @@ type instanceTypes struct {
 	typeMap map[string]*ec2types.InstanceTypeInfo
 }
 
-var _ fi.Cloud = &awsCloudImplementation{}
+var _ fi.Cloud = (*awsCloudImplementation)(nil)
 
 func (c *awsCloudImplementation) ProviderID() kops.CloudProviderID {
 	return kops.CloudProviderAWS
@@ -279,7 +279,11 @@ func loadAWSConfig(ctx context.Context, region string) (aws.Config, error) {
 		awsconfig.WithClientLogMode(aws.LogRetries),
 		awsconfig.WithLogger(awsLogger{}),
 		awsconfig.WithRetryer(func() aws.Retryer {
-			return retry.NewAdaptiveMode()
+			return retry.NewAdaptiveMode(func(ao *retry.AdaptiveModeOptions) {
+				ao.StandardOptions = append(ao.StandardOptions, func(so *retry.StandardOptions) {
+					so.MaxAttempts = ClientMaxRetries
+				})
+			})
 		}),
 	}
 
@@ -753,32 +757,7 @@ func getKarpenterGroups(c AWSCloud, cluster *kops.Cluster, instancegroups []*kop
 func buildKarpenterGroup(c AWSCloud, cluster *kops.Cluster, ig *kops.InstanceGroup, nodes []v1.Node) (*cloudinstances.CloudInstanceGroup, error) {
 	ctx := context.TODO()
 	nodeMap := cloudinstances.GetNodeMap(nodes, cluster)
-	instances := make(map[string]*ec2types.Instance)
-	updatedInstances := make(map[string]*ec2types.Instance)
 	clusterName := c.Tags()[TagClusterName]
-	var version string
-
-	{
-		input := &ec2.DescribeLaunchTemplatesInput{
-			Filters: []ec2types.Filter{
-				NewEC2Filter("tag:"+identity_aws.CloudTagInstanceGroupName, ig.ObjectMeta.Name),
-				NewEC2Filter("tag:"+TagClusterName, clusterName),
-			},
-		}
-		var list []ec2types.LaunchTemplate
-		paginator := ec2.NewDescribeLaunchTemplatesPaginator(c.EC2(), input)
-		for paginator.HasMorePages() {
-			page, err := paginator.NextPage(ctx)
-			if err != nil {
-				return nil, fmt.Errorf("error listing launch templates: %v", err)
-			}
-			list = append(list, page.LaunchTemplates...)
-		}
-		lt := list[0]
-		versionNumber := *lt.LatestVersionNumber
-		version = strconv.Itoa(int(versionNumber))
-
-	}
 
 	karpenterGroup := &cloudinstances.CloudInstanceGroup{
 		InstanceGroup: ig,
@@ -801,51 +780,12 @@ func buildKarpenterGroup(c AWSCloud, cluster *kops.Cluster, ig *kops.InstanceGro
 		for _, r := range result.Reservations {
 			for _, i := range r.Instances {
 				id := aws.ToString(i.InstanceId)
-				instances[id] = &i
+				cloudInstance, _ := karpenterGroup.NewCloudInstance(aws.ToString(i.InstanceId), cloudinstances.CloudInstanceStatusUpToDate, nodeMap[id])
+				addCloudInstanceData(cloudInstance, &i)
 			}
 		}
 	}
 
-	klog.V(2).Infof("found %d karpenter instances", len(instances))
-
-	{
-		req := &ec2.DescribeInstancesInput{
-			Filters: []ec2types.Filter{
-				NewEC2Filter("tag:"+identity_aws.CloudTagInstanceGroupName, ig.ObjectMeta.Name),
-				NewEC2Filter("tag:"+TagClusterName, clusterName),
-				NewEC2Filter("instance-state-name", "pending", "running", "stopping", "stopped"),
-				NewEC2Filter("tag:aws:ec2launchtemplate:version", version),
-			},
-		}
-
-		result, err := c.EC2().DescribeInstances(ctx, req)
-		if err != nil {
-			return nil, err
-		}
-
-		for _, r := range result.Reservations {
-			for _, i := range r.Instances {
-				id := aws.ToString(i.InstanceId)
-				updatedInstances[id] = &i
-			}
-		}
-	}
-	klog.V(2).Infof("found %d updated instances", len(updatedInstances))
-
-	{
-		for _, instance := range instances {
-			id := *instance.InstanceId
-			_, ready := updatedInstances[id]
-			var status string
-			if ready {
-				status = cloudinstances.CloudInstanceStatusUpToDate
-			} else {
-				status = cloudinstances.CloudInstanceStatusNeedsUpdate
-			}
-			cloudInstance, _ := karpenterGroup.NewCloudInstance(id, status, nodeMap[id])
-			addCloudInstanceData(cloudInstance, instance)
-		}
-	}
 	return karpenterGroup, nil
 }
 
@@ -1271,7 +1211,9 @@ func getTags(c AWSCloud, resourceID string) (map[string]string, error) {
 	for {
 		attempt++
 
-		response, err := c.EC2().DescribeTags(ctx, request)
+		response, err := c.EC2().DescribeTags(ctx, request, func(o *ec2.Options) {
+			o.RetryMaxAttempts = DescribeTagsMaxAttempts
+		})
 		if err != nil {
 			if isTagsEventualConsistencyError(err) {
 				if attempt > DescribeTagsMaxAttempts {
@@ -1469,89 +1411,6 @@ func addAWSTags(c AWSCloud, id string, expected map[string]string) error {
 	return nil
 }
 
-func (c *awsCloudImplementation) GetELBTags(loadBalancerName string) (map[string]string, error) {
-	return getELBTags(c, loadBalancerName)
-}
-
-func getELBTags(c AWSCloud, loadBalancerName string) (map[string]string, error) {
-	ctx := context.TODO()
-	tags := map[string]string{}
-
-	request := &elb.DescribeTagsInput{
-		LoadBalancerNames: []string{loadBalancerName},
-	}
-	response, err := c.ELB().DescribeTags(ctx, request)
-	if err != nil {
-		return nil, fmt.Errorf("error listing tags on %v: %v", loadBalancerName, err)
-	}
-
-	for _, tagset := range response.TagDescriptions {
-		for _, tag := range tagset.Tags {
-			tags[aws.ToString(tag.Key)] = aws.ToString(tag.Value)
-		}
-	}
-	return tags, nil
-}
-
-// CreateELBTags will add tags to the specified loadBalancer,
-// retrying up to MaxCreateTagsAttempts times if it hits an eventual-consistency type error
-func (c *awsCloudImplementation) CreateELBTags(loadBalancerName string, tags map[string]string) error {
-	return createELBTags(c, loadBalancerName, tags)
-}
-
-func createELBTags(c AWSCloud, loadBalancerName string, tags map[string]string) error {
-	if len(tags) == 0 {
-		return nil
-	}
-	ctx := context.TODO()
-
-	elbTags := []elbtypes.Tag{}
-	for k, v := range tags {
-		elbTags = append(elbTags, elbtypes.Tag{Key: aws.String(k), Value: aws.String(v)})
-	}
-
-	request := &elb.AddTagsInput{
-		Tags:              elbTags,
-		LoadBalancerNames: []string{loadBalancerName},
-	}
-
-	_, err := c.ELB().AddTags(ctx, request)
-	if err != nil {
-		return fmt.Errorf("error creating tags on %v: %v", loadBalancerName, err)
-	}
-
-	return nil
-}
-
-// RemoveELBTags will remove tags to the specified loadBalancer, retrying up to MaxCreateTagsAttempts times if it hits an eventual-consistency type error
-func (c *awsCloudImplementation) RemoveELBTags(loadBalancerName string, tags map[string]string) error {
-	return removeELBTags(c, loadBalancerName, tags)
-}
-
-func removeELBTags(c AWSCloud, loadBalancerName string, tags map[string]string) error {
-	if len(tags) == 0 {
-		return nil
-	}
-	ctx := context.TODO()
-
-	elbTagKeysOnly := []elbtypes.TagKeyOnly{}
-	for k := range tags {
-		elbTagKeysOnly = append(elbTagKeysOnly, elbtypes.TagKeyOnly{Key: aws.String(k)})
-	}
-
-	request := &elb.RemoveTagsInput{
-		Tags:              elbTagKeysOnly,
-		LoadBalancerNames: []string{loadBalancerName},
-	}
-
-	_, err := c.ELB().RemoveTags(ctx, request)
-	if err != nil {
-		return fmt.Errorf("error creating tags on %v: %v", loadBalancerName, err)
-	}
-
-	return nil
-}
-
 func (c *awsCloudImplementation) RemoveELBV2Tags(ResourceArn string, tags map[string]string) error {
 	return removeELBV2Tags(c, ResourceArn, tags)
 }
@@ -1658,93 +1517,6 @@ func (c *awsCloudImplementation) AddTags(name *string, tags map[string]string) {
 	}
 }
 
-func (c *awsCloudImplementation) FindELBByNameTag(findNameTag string) (*elbtypes.LoadBalancerDescription, error) {
-	return findELBByNameTag(c, findNameTag)
-}
-
-func findELBByNameTag(c AWSCloud, findNameTag string) (*elbtypes.LoadBalancerDescription, error) {
-	ctx := context.TODO()
-	// TODO: Any way around this?
-	klog.V(2).Infof("Listing all ELBs for findLoadBalancerByNameTag")
-
-	request := &elb.DescribeLoadBalancersInput{}
-	// ELB DescribeTags has a limit of 20 names, so we set the page size here to 20 also
-	request.PageSize = aws.Int32(20)
-
-	var found []elbtypes.LoadBalancerDescription
-
-	paginator := elb.NewDescribeLoadBalancersPaginator(c.ELB(), request)
-	for paginator.HasMorePages() {
-		page, err := paginator.NextPage(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("error describing LoadBalancers: %w", err)
-		}
-		if len(page.LoadBalancerDescriptions) == 0 {
-			continue
-		}
-
-		// TODO: Filter by cluster?
-
-		var names []string
-		nameToELB := make(map[string]elbtypes.LoadBalancerDescription)
-		for _, elb := range page.LoadBalancerDescriptions {
-			name := aws.ToString(elb.LoadBalancerName)
-			nameToELB[name] = elb
-			names = append(names, name)
-		}
-
-		tagMap, err := c.DescribeELBTags(names)
-		if err != nil {
-			return nil, fmt.Errorf("error describing LoadBalancer tags: %w", err)
-		}
-
-		for loadBalancerName, tags := range tagMap {
-			name, foundNameTag := FindELBTag(tags, "Name")
-			if !foundNameTag || name != findNameTag {
-				continue
-			}
-
-			elb := nameToELB[loadBalancerName]
-			found = append(found, elb)
-		}
-	}
-
-	if len(found) == 0 {
-		return nil, nil
-	}
-
-	if len(found) != 1 {
-		return nil, fmt.Errorf("Found multiple ELBs with Name %q", findNameTag)
-	}
-
-	return &found[0], nil
-}
-
-func (c *awsCloudImplementation) DescribeELBTags(loadBalancerNames []string) (map[string][]elbtypes.Tag, error) {
-	return describeELBTags(c, loadBalancerNames)
-}
-
-func describeELBTags(c AWSCloud, loadBalancerNames []string) (map[string][]elbtypes.Tag, error) {
-	ctx := context.TODO()
-	// TODO: Filter by cluster?
-
-	request := &elb.DescribeTagsInput{}
-	request.LoadBalancerNames = loadBalancerNames
-
-	// TODO: Cache?
-	klog.V(2).Infof("Querying ELB tags for %s", loadBalancerNames)
-	response, err := c.ELB().DescribeTags(ctx, request)
-	if err != nil {
-		return nil, err
-	}
-
-	tagMap := make(map[string][]elbtypes.Tag)
-	for _, tagset := range response.TagDescriptions {
-		tagMap[aws.ToString(tagset.LoadBalancerName)] = tagset.Tags
-	}
-	return tagMap, nil
-}
-
 func FindLatestELBV2ByNameTag(loadBalancers []*LoadBalancerInfo, findNameTag string) *LoadBalancerInfo {
 	var latest *LoadBalancerInfo
 	var latestRevision int
@@ -1760,7 +1532,7 @@ func FindLatestELBV2ByNameTag(loadBalancers []*LoadBalancerInfo, findNameTag str
 		} else {
 			n, err := strconv.Atoi(revisionTag)
 			if err != nil {
-				klog.Warningf("ignoring load balancer %q with revision %q", aws.ToString(lb.LoadBalancer.LoadBalancerArn), revision)
+				klog.Warningf("ignoring load balancer %q with revision %d", aws.ToString(lb.LoadBalancer.LoadBalancerArn), revision)
 				continue
 			}
 			revision = n
@@ -1960,23 +1732,7 @@ func resolveImage(ctx context.Context, ssmClient awsinterfaces.SSMAPI, ec2Client
 			request.Owners = []string{"self"}
 			request.Filters = append(request.Filters, NewEC2Filter("name", name))
 		} else if len(tokens) == 2 {
-			owner := tokens[0]
-
-			// Check for well known owner aliases
-			switch owner {
-			case "amazon", "amazon.com":
-				owner = WellKnownAccountAmazonLinux2
-			case "debian10":
-				owner = WellKnownAccountDebian
-			case "debian11":
-				owner = WellKnownAccountDebian
-			case "flatcar":
-				owner = WellKnownAccountFlatcar
-			case "redhat", "redhat.com":
-				owner = WellKnownAccountRedhat
-			case "ubuntu":
-				owner = WellKnownAccountUbuntu
-			}
+			owner := ResolveImageOwnerAlias(tokens[0])
 
 			request.Owners = []string{owner}
 			request.Filters = append(request.Filters, NewEC2Filter("name", tokens[1]))
@@ -2011,6 +1767,26 @@ func resolveImage(ctx context.Context, ssmClient awsinterfaces.SSMAPI, ec2Client
 
 	klog.V(4).Infof("Resolved image %q", aws.ToString(image.ImageId))
 	return image, nil
+}
+
+// ResolveImageOwnerAlias maps a well-known image owner alias (e.g. "ubuntu") to its
+// AWS account ID. Unrecognized owners are returned unchanged.
+func ResolveImageOwnerAlias(owner string) string {
+	switch owner {
+	case "amazon", "amazon.com":
+		return WellKnownAccountAmazonLinux2023
+	case "debian", "debian11":
+		return WellKnownAccountDebian
+	case "flatcar":
+		return WellKnownAccountFlatcar
+	case "redhat", "redhat.com":
+		return WellKnownAccountRedhat
+	case "ubuntu":
+		return WellKnownAccountUbuntu
+	case "rocky", "rockylinux":
+		return WellKnownAccountRockyLinux
+	}
+	return owner
 }
 
 func (c *awsCloudImplementation) DescribeAvailabilityZones() ([]ec2types.AvailabilityZone, error) {
@@ -2178,13 +1954,7 @@ func findDNSName(cloud AWSCloud, cluster *kops.Cluster) (string, error) {
 	if cluster.Spec.API.LoadBalancer == nil {
 		return "", nil
 	}
-	if cluster.Spec.API.LoadBalancer.Class == kops.LoadBalancerClassClassic {
-		if lb, err := cloud.FindELBByNameTag(name); err != nil {
-			return "", fmt.Errorf("error looking for AWS ELB: %v", err)
-		} else if lb != nil {
-			return aws.ToString(lb.DNSName), nil
-		}
-	} else if cluster.Spec.API.LoadBalancer.Class == kops.LoadBalancerClassNetwork {
+	if cluster.Spec.API.LoadBalancer.Class == kops.LoadBalancerClassNetwork {
 		allLoadBalancers, err := ListELBV2LoadBalancers(ctx, cloud)
 		if err != nil {
 			return "", fmt.Errorf("looking for AWS NLB: %w", err)
@@ -2202,8 +1972,8 @@ func findDNSName(cloud AWSCloud, cluster *kops.Cluster) (string, error) {
 func (c *awsCloudImplementation) DefaultInstanceType(cluster *kops.Cluster, ig *kops.InstanceGroup) (string, error) {
 	var candidates []ec2types.InstanceType
 
-	switch ig.Spec.Role {
-	case kops.InstanceGroupRoleControlPlane, kops.InstanceGroupRoleNode, kops.InstanceGroupRoleAPIServer:
+	switch {
+	case ig.Spec.Role.HasNode() || ig.Spec.Role.IsControlPlaneType():
 		// t3.medium is the cheapest instance with 4GB of mem, unlimited by default, fast and has decent network
 		// c5.large and c4.large are a good second option in case t3.medium is not available in the AZ
 		candidates = []ec2types.InstanceType{
@@ -2213,7 +1983,7 @@ func (c *awsCloudImplementation) DefaultInstanceType(cluster *kops.Cluster, ig *
 			ec2types.InstanceTypeT4gMedium,
 		}
 
-	case kops.InstanceGroupRoleBastion:
+	case ig.Spec.Role.HasBastion():
 		candidates = []ec2types.InstanceType{
 			ec2types.InstanceTypeT3Micro,
 			ec2types.InstanceTypeT2Micro,
@@ -2368,44 +2138,4 @@ func GetRolesInInstanceProfile(c AWSCloud, profileName string) ([]string, error)
 		roleNames = append(roleNames, *role.RoleName)
 	}
 	return roleNames, nil
-}
-
-// GetInstanceCertificateNames returns the instance hostname and addresses that should go into certificates.
-// The first value is the node name and any additional values are the DNS name and IP addresses.
-func GetInstanceCertificateNames(instances *ec2.DescribeInstancesOutput) (addrs []string, err error) {
-	if len(instances.Reservations) != 1 {
-		return nil, fmt.Errorf("too many reservations returned for the single instance-id")
-	}
-
-	if len(instances.Reservations[0].Instances) != 1 {
-		return nil, fmt.Errorf("too many instances returned for the single instance-id")
-	}
-
-	instance := instances.Reservations[0].Instances[0]
-
-	addrs = append(addrs, *instance.InstanceId)
-
-	if instance.PrivateDnsName != nil {
-		addrs = append(addrs, *instance.PrivateDnsName)
-	}
-
-	// We only use data for the first interface, and only the first IP
-	for _, iface := range instance.NetworkInterfaces {
-		if iface.Attachment == nil {
-			continue
-		}
-		if *iface.Attachment.DeviceIndex != 0 {
-			continue
-		}
-		if iface.PrivateIpAddress != nil {
-			addrs = append(addrs, *iface.PrivateIpAddress)
-		}
-		if iface.Ipv6Addresses != nil && len(iface.Ipv6Addresses) > 0 {
-			addrs = append(addrs, *iface.Ipv6Addresses[0].Ipv6Address)
-		}
-		if iface.Association != nil && iface.Association.PublicIp != nil {
-			addrs = append(addrs, *iface.Association.PublicIp)
-		}
-	}
-	return addrs, nil
 }

@@ -19,10 +19,10 @@ package openstacktasks
 import (
 	"fmt"
 
-	"github.com/gophercloud/gophercloud/openstack/compute/v2/servers"
+	"github.com/gophercloud/gophercloud/v2/openstack/compute/v2/servers"
 
-	"github.com/gophercloud/gophercloud"
-	v2pools "github.com/gophercloud/gophercloud/openstack/loadbalancer/v2/pools"
+	"github.com/gophercloud/gophercloud/v2"
+	v2pools "github.com/gophercloud/gophercloud/v2/openstack/loadbalancer/v2/pools"
 	"k8s.io/kops/upup/pkg/fi"
 	"k8s.io/kops/upup/pkg/fi/cloudup/openstack"
 	"k8s.io/kops/util/pkg/vfs"
@@ -58,7 +58,7 @@ func (e *PoolAssociation) GetDependencies(tasks map[string]fi.CloudupTask) []fi.
 	return deps
 }
 
-var _ fi.CompareWithID = &PoolAssociation{}
+var _ fi.CompareWithID = (*PoolAssociation)(nil)
 
 func (s *PoolAssociation) CompareWithID() *string {
 	return s.ID
@@ -106,15 +106,15 @@ func (p *PoolAssociation) Find(context *fi.CloudupContext) (*PoolAssociation, er
 	}
 
 	actual := &PoolAssociation{
-		ID:            fi.PtrTo(found.ID),
-		Name:          fi.PtrTo(found.Name),
+		ID:            new(found.ID),
+		Name:          new(found.Name),
 		Pool:          pool,
 		ServerPrefix:  p.ServerPrefix,
 		ClusterName:   p.ClusterName,
 		InterfaceName: p.InterfaceName,
 		ProtocolPort:  p.ProtocolPort,
 		Lifecycle:     p.Lifecycle,
-		Weight:        fi.PtrTo(found.Weight),
+		Weight:        new(found.Weight),
 	}
 	p.ID = actual.ID
 	return actual, nil
@@ -184,7 +184,7 @@ func (_ *PoolAssociation) RenderOpenstack(t *openstack.OpenstackAPITarget, a, e,
 			if err != nil {
 				return fmt.Errorf("Failed to create member: %v", err)
 			}
-			e.ID = fi.PtrTo(member.ID)
+			e.ID = new(member.ID)
 		}
 	} else {
 		_, err := t.Cloud.UpdateMemberInPool(fi.ValueOf(a.Pool.ID), fi.ValueOf(a.ID), v2pools.UpdateMemberOpts{

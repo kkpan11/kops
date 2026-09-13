@@ -140,21 +140,22 @@ To create a new instance group and have more control over the configuration, a c
 apiVersion: kops.k8s.io/v1alpha2
 kind: InstanceGroup
 metadata:
+  name: ocean-nodes
   labels:
     kops.k8s.io/cluster: "example"
     spotinst.io/spot-percentage: "90"
-  spec:
-    image: 099720109477/ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server-20221206
-    instanceMetadata:
-      httpPutResponseHopLimit: 1
-      httpTokens: required
-    machineType: m5.large
-    #define the max and min numbers of instances in the group
-    maxSize: 3
-    minSize: 1
-    role: Node
-    subnets:
-      - us-west-2b
+spec:
+  image: 099720109477/ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-20260714
+  instanceMetadata:
+    httpPutResponseHopLimit: 1
+    httpTokens: required
+  machineType: m5.large
+  #define the max and min numbers of instances in the group
+  maxSize: 3
+  minSize: 1
+  role: Node
+  subnets:
+    - us-west-2b
 ```
 
 ## InstanceGroup Metadata Labels
@@ -204,11 +205,13 @@ metadata:
 ```
 
 
-| Label                                                           | Description                                                                            | Default |
-|-----------------------------------------------------------------|----------------------------------------------------------------------------------------|---|
-| `spotinst.io/strategy-cluster-spread-nodes-by`                  | Specify how Ocean will spread the nodes across markets by this value [vcpu,count].     | `count` |
+
+| Label | Description                                                                            | Default |
+|---|----------------------------------------------------------------------------------------|---|
+| `spotinst.io/strategy-cluster-spread-nodes-by` | Specify how Ocean will spread the nodes across markets by this value [vcpu,count].     | `count` |
 | `spotinst.io/strategy-cluster-orientation-availability-vs-cost` | Specify approach [cost,balanced,cheapest] that Ocean takes while launching nodes.      | `balanced` |
-| `spotinst.io/resource-tag-specification-volumes`                | Specify if Volume resources will be tagged with Virtual Node Group tags or Ocean tags. | `false` |
+| `spotinst.io/resource-tag-specification-volumes` | Specify if Volume resources will be tagged with Virtual Node Group tags or Ocean tags. | `false` |
+| `spotinst.io/autoscaler-aggressive-scale-down` | Specify  if nodes to be promptly scaled down without any waiting period. | `false` |
 
 ## Documentation
 

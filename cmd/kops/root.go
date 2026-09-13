@@ -104,6 +104,11 @@ func init() {
 	cobra.OnInitialize(initConfig)
 
 	klog.InitFlags(nil)
+	// Opt into the new klog behavior so that -stderrthreshold is honored even
+	// when -logtostderr=true (the default).
+	// Ref: kubernetes/klog#212, kubernetes/klog#432
+	_ = goflag.Set("legacy_stderr_threshold_behavior", "false")
+	_ = goflag.Set("stderrthreshold", "INFO")
 
 	factory := util.NewFactory(&rootCommand.FactoryOptions)
 	rootCommand.factory = factory
@@ -171,6 +176,7 @@ func NewCmdRoot(f *util.Factory, out io.Writer) *cobra.Command {
 	cmd.AddCommand(NewCmdGet(f, out))
 	cmd.AddCommand(commands.NewCmdHelpers(f, out))
 	cmd.AddCommand(NewCmdPromote(f, out))
+	cmd.AddCommand(NewCmdReconcile(f, out))
 	cmd.AddCommand(NewCmdReplace(f, out))
 	cmd.AddCommand(NewCmdRollingUpdate(f, out))
 	cmd.AddCommand(NewCmdToolbox(f, out))

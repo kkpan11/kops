@@ -10,9 +10,11 @@ import (
 )
 
 const (
-	monitoringBasePath     = "v2/monitoring"
-	alertPolicyBasePath    = monitoringBasePath + "/alerts"
-	dropletMetricsBasePath = monitoringBasePath + "/metrics/droplet"
+	monitoringBasePath          = "v2/monitoring"
+	alertPolicyBasePath         = monitoringBasePath + "/alerts"
+	dropletMetricsBasePath      = monitoringBasePath + "/metrics/droplet"
+	loadBalancerMetricsBasePath = monitoringBasePath + "/metrics/load_balancer"
+	dbaasMysqlMetricsBasePath   = monitoringBasePath + "/metrics/database/mysql"
 
 	DropletCPUUtilizationPercent        = "v1/insights/droplet/cpu"
 	DropletMemoryUtilizationPercent     = "v1/insights/droplet/memory_utilization_percent"
@@ -67,6 +69,49 @@ type MonitoringService interface {
 	GetDropletCachedMemory(context.Context, *DropletMetricsRequest) (*MetricsResponse, *Response, error)
 	GetDropletFreeMemory(context.Context, *DropletMetricsRequest) (*MetricsResponse, *Response, error)
 	GetDropletTotalMemory(context.Context, *DropletMetricsRequest) (*MetricsResponse, *Response, error)
+
+	GetLoadBalancerFrontendHttpRequestsPerSecond(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error)
+	GetLoadBalancerFrontendConnectionsCurrent(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error)
+	GetLoadBalancerFrontendConnectionsLimit(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error)
+	GetLoadBalancerFrontendCpuUtilization(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error)
+	GetLoadBalancerFrontendNetworkThroughputHttp(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error)
+	GetLoadBalancerFrontendNetworkThroughputUdp(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error)
+	GetLoadBalancerFrontendNetworkThroughputTcp(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error)
+	GetLoadBalancerFrontendNlbTcpNetworkThroughput(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error)
+	GetLoadBalancerFrontendNlbUdpNetworkThroughput(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error)
+	GetLoadBalancerFrontendFirewallDroppedBytes(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error)
+	GetLoadBalancerFrontendFirewallDroppedPackets(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error)
+	GetLoadBalancerFrontendHttpResponses(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error)
+	GetLoadBalancerFrontendTlsConnectionsCurrent(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error)
+	GetLoadBalancerFrontendTlsConnectionsLimit(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error)
+	GetLoadBalancerFrontendTlsConnectionsExceedingRateLimit(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error)
+	GetLoadBalancerDropletsHttpSessionDurationAvg(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error)
+	GetLoadBalancerDropletsHttpSessionDuration50P(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error)
+	GetLoadBalancerDropletsHttpSessionDuration95P(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error)
+	GetLoadBalancerDropletsHttpResponseTimeAvg(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error)
+	GetLoadBalancerDropletsHttpResponseTime50P(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error)
+	GetLoadBalancerDropletsHttpResponseTime95P(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error)
+	GetLoadBalancerDropletsHttpResponseTime99P(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error)
+	GetLoadBalancerDropletsQueueSize(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error)
+	GetLoadBalancerDropletsHttpResponses(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error)
+	GetLoadBalancerDropletsConnections(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error)
+	GetLoadBalancerDropletsHealthChecks(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error)
+	GetLoadBalancerDropletsDowntime(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error)
+
+	// DBaaS MySQL metrics (host-level: db_id only)
+	GetDbaasMysqlCpuUsage(ctx context.Context, args *DbaasMysqlCpuUsageRequest) (*MetricsResponse, *Response, error)
+	GetDbaasMysqlLoad(ctx context.Context, args *DbaasMysqlLoadRequest) (*MetricsResponse, *Response, error)
+	GetDbaasMysqlMemoryUsage(ctx context.Context, args *DbaasMysqlMemoryUsageRequest) (*MetricsResponse, *Response, error)
+	GetDbaasMysqlDiskUsage(ctx context.Context, args *DbaasMysqlDiskUsageRequest) (*MetricsResponse, *Response, error)
+	// DBaaS MySQL metrics (service-level: db_id + service)
+	GetDbaasMysqlThreadsConnected(ctx context.Context, args *DbaasMysqlServiceMetricsRequest) (*MetricsResponse, *Response, error)
+	GetDbaasMysqlThreadsCreatedRate(ctx context.Context, args *DbaasMysqlServiceMetricsRequest) (*MetricsResponse, *Response, error)
+	GetDbaasMysqlThreadsActive(ctx context.Context, args *DbaasMysqlServiceMetricsRequest) (*MetricsResponse, *Response, error)
+	GetDbaasMysqlIndexVsSequentialReads(ctx context.Context, args *DbaasMysqlServiceMetricsRequest) (*MetricsResponse, *Response, error)
+	GetDbaasMysqlOpRates(ctx context.Context, args *DbaasMysqlOpRatesRequest) (*MetricsResponse, *Response, error)
+	// DBaaS MySQL metrics (schema-level: db_id + service + schema)
+	GetDbaasMysqlSchemaThroughput(ctx context.Context, args *DbaasMysqlSchemaThroughputRequest) (*MetricsResponse, *Response, error)
+	GetDbaasMysqlSchemaLatency(ctx context.Context, args *DbaasMysqlSchemaLatencyRequest) (*MetricsResponse, *Response, error)
 }
 
 // MonitoringServiceOp handles communication with monitoring related methods of the
@@ -161,6 +206,80 @@ type DropletBandwidthMetricsRequest struct {
 	DropletMetricsRequest
 	Interface string
 	Direction string
+}
+
+// LoadBalancerMetricsRequest holds the information needed to retrieve Load Balancer various metrics.
+type LoadBalancerMetricsRequest struct {
+	LoadBalancerID string
+	Start          time.Time
+	End            time.Time
+}
+
+// DbaasMysqlMetricsRequest holds the information needed to retrieve DBaaS MySQL host-level metrics (db_id only).
+type DbaasMysqlMetricsRequest struct {
+	DBID  string
+	Start time.Time
+	End   time.Time
+}
+
+// DbaasMysqlCpuUsageRequest holds the information needed to retrieve MySQL cluster CPU usage (percent). Aggregate: avg, max, min.
+type DbaasMysqlCpuUsageRequest struct {
+	DbaasMysqlMetricsRequest
+	Aggregate string // avg, max, min
+}
+
+// DbaasMysqlLoadRequest holds the information needed to retrieve MySQL cluster load average. Metric: load1, load5, load15. Aggregate: avg, max.
+type DbaasMysqlLoadRequest struct {
+	DbaasMysqlMetricsRequest
+	Metric    string // load1, load5, load15
+	Aggregate string // avg, max
+}
+
+// DbaasMysqlMemoryUsageRequest holds the information needed to retrieve MySQL cluster memory usage (percent). Aggregate: avg, max, min.
+type DbaasMysqlMemoryUsageRequest struct {
+	DbaasMysqlMetricsRequest
+	Aggregate string // avg, max, min
+}
+
+// DbaasMysqlDiskUsageRequest holds the information needed to retrieve MySQL cluster disk usage (percent). Aggregate: avg, max, min.
+type DbaasMysqlDiskUsageRequest struct {
+	DbaasMysqlMetricsRequest
+	Aggregate string // avg, max, min
+}
+
+// DbaasMysqlServiceMetricsRequest holds the information needed to retrieve DBaaS MySQL service-level metrics (db_id + service).
+type DbaasMysqlServiceMetricsRequest struct {
+	DBID    string
+	Service string
+	Start   time.Time
+	End     time.Time
+}
+
+// DbaasMysqlOpRatesRequest holds the information needed to retrieve MySQL service operations rate. Metric: select, insert, update, delete.
+type DbaasMysqlOpRatesRequest struct {
+	DbaasMysqlServiceMetricsRequest
+	Metric string // select, insert, update, delete
+}
+
+// DbaasMysqlSchemaMetricsRequest holds the information needed to retrieve DBaaS MySQL schema-level metrics (db_id + service + schema).
+type DbaasMysqlSchemaMetricsRequest struct {
+	DBID    string
+	Service string
+	Schema  string
+	Start   time.Time
+	End     time.Time
+}
+
+// DbaasMysqlSchemaThroughputRequest holds the information needed to retrieve MySQL schema table I/O throughput (rows/s). Metric: insert, fetch, update, delete.
+type DbaasMysqlSchemaThroughputRequest struct {
+	DbaasMysqlSchemaMetricsRequest
+	Metric string // insert, fetch, update, delete
+}
+
+// DbaasMysqlSchemaLatencyRequest holds the information needed to retrieve MySQL schema table I/O latency (seconds). Metric: insert, fetch, update, delete.
+type DbaasMysqlSchemaLatencyRequest struct {
+	DbaasMysqlSchemaMetricsRequest
+	Metric string // insert, fetch, update, delete
 }
 
 // MetricsResponse holds a Metrics query response.
@@ -371,4 +490,302 @@ func (s *MonitoringServiceOp) getDropletMetrics(ctx context.Context, path string
 	resp, err := s.client.Do(ctx, req, root)
 
 	return root, resp, err
+}
+
+// GetLoadBalancerFrontendHttpRequestsPerSecond retrieves frontend HTTP requests per second for a given load balancer.
+func (s *MonitoringServiceOp) GetLoadBalancerFrontendHttpRequestsPerSecond(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error) {
+	return s.getLoadBalancerMetrics(ctx, "/frontend_http_requests_per_second", args)
+}
+
+// GetLoadBalancerFrontendConnectionsCurrent retrieves frontend total current active connections for a given load balancer.
+func (s *MonitoringServiceOp) GetLoadBalancerFrontendConnectionsCurrent(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error) {
+	return s.getLoadBalancerMetrics(ctx, "/frontend_connections_current", args)
+}
+
+// GetLoadBalancerFrontendConnectionsLimit retrieves frontend max connections limit for a given load balancer.
+func (s *MonitoringServiceOp) GetLoadBalancerFrontendConnectionsLimit(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error) {
+	return s.getLoadBalancerMetrics(ctx, "/frontend_connections_limit", args)
+}
+
+// GetLoadBalancerFrontendCpuUtilization retrieves frontend average percentage cpu utilization for a given load balancer.
+func (s *MonitoringServiceOp) GetLoadBalancerFrontendCpuUtilization(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error) {
+	return s.getLoadBalancerMetrics(ctx, "/frontend_cpu_utilization", args)
+}
+
+// GetLoadBalancerFrontendNetworkThroughputHttp retrieves frontend HTTP throughput for a given load balancer.
+func (s *MonitoringServiceOp) GetLoadBalancerFrontendNetworkThroughputHttp(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error) {
+	return s.getLoadBalancerMetrics(ctx, "/frontend_network_throughput_http", args)
+}
+
+// GetLoadBalancerFrontendNetworkThroughputUdp retrieves frontend UDP throughput for a given load balancer.
+func (s *MonitoringServiceOp) GetLoadBalancerFrontendNetworkThroughputUdp(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error) {
+	return s.getLoadBalancerMetrics(ctx, "/frontend_network_throughput_udp", args)
+}
+
+// GetLoadBalancerFrontendNetworkThroughputTcp retrieves frontend TCP throughput for a given load balancer.
+func (s *MonitoringServiceOp) GetLoadBalancerFrontendNetworkThroughputTcp(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error) {
+	return s.getLoadBalancerMetrics(ctx, "/frontend_network_throughput_tcp", args)
+}
+
+// GetLoadBalancerFrontendNlbTcpNetworkThroughput retrieves frontend TCP throughput for a given network load balancer.
+func (s *MonitoringServiceOp) GetLoadBalancerFrontendNlbTcpNetworkThroughput(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error) {
+	return s.getLoadBalancerMetrics(ctx, "/frontend_nlb_tcp_network_throughput", args)
+}
+
+// GetLoadBalancerFrontendNlbUdpNetworkThroughput retrieves frontend UDP throughput for a given network load balancer.
+func (s *MonitoringServiceOp) GetLoadBalancerFrontendNlbUdpNetworkThroughput(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error) {
+	return s.getLoadBalancerMetrics(ctx, "/frontend_nlb_udp_network_throughput", args)
+}
+
+// GetLoadBalancerFrontendFirewallDroppedBytes retrieves firewall dropped bytes for a given load balancer.
+func (s *MonitoringServiceOp) GetLoadBalancerFrontendFirewallDroppedBytes(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error) {
+	return s.getLoadBalancerMetrics(ctx, "/frontend_firewall_dropped_bytes", args)
+}
+
+// GetLoadBalancerFrontendFirewallDroppedPackets retrieves firewall dropped packets for a given load balancer.
+func (s *MonitoringServiceOp) GetLoadBalancerFrontendFirewallDroppedPackets(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error) {
+	return s.getLoadBalancerMetrics(ctx, "/frontend_firewall_dropped_packets", args)
+}
+
+// GetLoadBalancerFrontendHttpResponses retrieves frontend HTTP rate of response code for a given load balancer.
+func (s *MonitoringServiceOp) GetLoadBalancerFrontendHttpResponses(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error) {
+	return s.getLoadBalancerMetrics(ctx, "/frontend_http_responses", args)
+}
+
+// GetLoadBalancerFrontendTlsConnectionsCurrent retrieves frontend current TLS connections rate for a given load balancer.
+func (s *MonitoringServiceOp) GetLoadBalancerFrontendTlsConnectionsCurrent(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error) {
+	return s.getLoadBalancerMetrics(ctx, "/frontend_tls_connections_current", args)
+}
+
+// GetLoadBalancerFrontendTlsConnectionsLimit retrieves frontend max TLS connections limit for a given load balancer.
+func (s *MonitoringServiceOp) GetLoadBalancerFrontendTlsConnectionsLimit(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error) {
+	return s.getLoadBalancerMetrics(ctx, "/frontend_tls_connections_limit", args)
+}
+
+// GetLoadBalancerFrontendTlsConnectionsExceedingRateLimit retrieves frontend closed TLS connections for exceeded rate limit for a given load balancer.
+func (s *MonitoringServiceOp) GetLoadBalancerFrontendTlsConnectionsExceedingRateLimit(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error) {
+	return s.getLoadBalancerMetrics(ctx, "/frontend_tls_connections_exceeding_rate_limit", args)
+}
+
+// GetLoadBalancerDropletsHttpSessionDurationAvg retrieves droplet average HTTP session duration for a given load balancer.
+func (s *MonitoringServiceOp) GetLoadBalancerDropletsHttpSessionDurationAvg(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error) {
+	return s.getLoadBalancerMetrics(ctx, "/droplets_http_session_duration_avg", args)
+}
+
+// GetLoadBalancerDropletsHttpSessionDuration50P retrieves droplet 50th percentile HTTP session duration for a given load balancer.
+func (s *MonitoringServiceOp) GetLoadBalancerDropletsHttpSessionDuration50P(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error) {
+	return s.getLoadBalancerMetrics(ctx, "/droplets_http_session_duration_50p", args)
+}
+
+// GetLoadBalancerDropletsHttpSessionDuration95P retrieves droplet 95th percentile HTTP session duration for a given load balancer.
+func (s *MonitoringServiceOp) GetLoadBalancerDropletsHttpSessionDuration95P(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error) {
+	return s.getLoadBalancerMetrics(ctx, "/droplets_http_session_duration_95p", args)
+}
+
+// GetLoadBalancerDropletsHttpResponseTimeAvg retrieves droplet average HTTP response time for a given load balancer.
+func (s *MonitoringServiceOp) GetLoadBalancerDropletsHttpResponseTimeAvg(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error) {
+	return s.getLoadBalancerMetrics(ctx, "/droplets_http_response_time_avg", args)
+}
+
+// GetLoadBalancerDropletsHttpResponseTime50P retrieves droplet 50th percentile HTTP response time for a given load balancer.
+func (s *MonitoringServiceOp) GetLoadBalancerDropletsHttpResponseTime50P(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error) {
+	return s.getLoadBalancerMetrics(ctx, "/droplets_http_response_time_50p", args)
+}
+
+// GetLoadBalancerDropletsHttpResponseTime95P retrieves droplet 95th percentile HTTP response time for a given load balancer.
+func (s *MonitoringServiceOp) GetLoadBalancerDropletsHttpResponseTime95P(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error) {
+	return s.getLoadBalancerMetrics(ctx, "/droplets_http_response_time_95p", args)
+}
+
+// GetLoadBalancerDropletsHttpResponseTime99P retrieves droplet 99th percentile HTTP response time for a given load balancer.
+func (s *MonitoringServiceOp) GetLoadBalancerDropletsHttpResponseTime99P(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error) {
+	return s.getLoadBalancerMetrics(ctx, "/droplets_http_response_time_99p", args)
+}
+
+// GetLoadBalancerDropletsQueueSize retrieves droplet queue size for a given load balancer.
+func (s *MonitoringServiceOp) GetLoadBalancerDropletsQueueSize(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error) {
+	return s.getLoadBalancerMetrics(ctx, "/droplets_queue_size", args)
+}
+
+// GetLoadBalancerDropletsHttpResponses retrieves droplet HTTP rate of response code for a given load balancer.
+func (s *MonitoringServiceOp) GetLoadBalancerDropletsHttpResponses(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error) {
+	return s.getLoadBalancerMetrics(ctx, "/droplets_http_responses", args)
+}
+
+// GetLoadBalancerDropletsConnections retrieves droplet active connections for a given load balancer.
+func (s *MonitoringServiceOp) GetLoadBalancerDropletsConnections(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error) {
+	return s.getLoadBalancerMetrics(ctx, "/droplets_connections", args)
+}
+
+// GetLoadBalancerDropletsHealthChecks retrieves droplet health check status for a given load balancer.
+func (s *MonitoringServiceOp) GetLoadBalancerDropletsHealthChecks(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error) {
+	return s.getLoadBalancerMetrics(ctx, "/droplets_health_checks", args)
+}
+
+// GetLoadBalancerDropletsDowntime retrieves droplet downtime status for a given load balancer.
+func (s *MonitoringServiceOp) GetLoadBalancerDropletsDowntime(ctx context.Context, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error) {
+	return s.getLoadBalancerMetrics(ctx, "/droplets_downtime", args)
+}
+
+func (s *MonitoringServiceOp) getLoadBalancerMetrics(ctx context.Context, path string, args *LoadBalancerMetricsRequest) (*MetricsResponse, *Response, error) {
+	fullPath := loadBalancerMetricsBasePath + path
+	req, err := s.client.NewRequest(ctx, http.MethodGet, fullPath, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	q := req.URL.Query()
+	q.Add("lb_id", args.LoadBalancerID)
+	q.Add("start", fmt.Sprintf("%d", args.Start.Unix()))
+	q.Add("end", fmt.Sprintf("%d", args.End.Unix()))
+	req.URL.RawQuery = q.Encode()
+
+	root := new(MetricsResponse)
+	resp, err := s.client.Do(ctx, req, root)
+
+	return root, resp, err
+}
+
+// getDbaasMysqlMetrics performs a GET request for a DBaaS MySQL metric path with the given query params.
+func (s *MonitoringServiceOp) getDbaasMysqlMetrics(ctx context.Context, path string, params map[string]string) (*MetricsResponse, *Response, error) {
+	fullPath := dbaasMysqlMetricsBasePath + path
+	req, err := s.client.NewRequest(ctx, http.MethodGet, fullPath, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	q := req.URL.Query()
+	for k, v := range params {
+		q.Add(k, v)
+	}
+	req.URL.RawQuery = q.Encode()
+	root := new(MetricsResponse)
+	resp, err := s.client.Do(ctx, req, root)
+	return root, resp, err
+}
+
+// GetDbaasMysqlCpuUsage retrieves CPU usage (percent) for a MySQL cluster. Aggregate: avg, max, min.
+func (s *MonitoringServiceOp) GetDbaasMysqlCpuUsage(ctx context.Context, args *DbaasMysqlCpuUsageRequest) (*MetricsResponse, *Response, error) {
+	params := map[string]string{
+		"db_id":     args.DBID,
+		"start":     fmt.Sprintf("%d", args.Start.Unix()),
+		"end":       fmt.Sprintf("%d", args.End.Unix()),
+		"aggregate": args.Aggregate,
+	}
+	return s.getDbaasMysqlMetrics(ctx, "/cpu_usage", params)
+}
+
+// GetDbaasMysqlLoad retrieves load average for a MySQL cluster. Metric: load1, load5, load15. Aggregate: avg, max.
+func (s *MonitoringServiceOp) GetDbaasMysqlLoad(ctx context.Context, args *DbaasMysqlLoadRequest) (*MetricsResponse, *Response, error) {
+	params := map[string]string{
+		"db_id":     args.DBID,
+		"start":     fmt.Sprintf("%d", args.Start.Unix()),
+		"end":       fmt.Sprintf("%d", args.End.Unix()),
+		"metric":    args.Metric,
+		"aggregate": args.Aggregate,
+	}
+	return s.getDbaasMysqlMetrics(ctx, "/load", params)
+}
+
+// GetDbaasMysqlMemoryUsage retrieves memory usage (percent) for a MySQL cluster. Aggregate: avg, max, min.
+func (s *MonitoringServiceOp) GetDbaasMysqlMemoryUsage(ctx context.Context, args *DbaasMysqlMemoryUsageRequest) (*MetricsResponse, *Response, error) {
+	params := map[string]string{
+		"db_id":     args.DBID,
+		"start":     fmt.Sprintf("%d", args.Start.Unix()),
+		"end":       fmt.Sprintf("%d", args.End.Unix()),
+		"aggregate": args.Aggregate,
+	}
+	return s.getDbaasMysqlMetrics(ctx, "/memory_usage", params)
+}
+
+// GetDbaasMysqlDiskUsage retrieves disk usage (percent) for a MySQL cluster. Aggregate: avg, max, min.
+func (s *MonitoringServiceOp) GetDbaasMysqlDiskUsage(ctx context.Context, args *DbaasMysqlDiskUsageRequest) (*MetricsResponse, *Response, error) {
+	params := map[string]string{
+		"db_id":     args.DBID,
+		"start":     fmt.Sprintf("%d", args.Start.Unix()),
+		"end":       fmt.Sprintf("%d", args.End.Unix()),
+		"aggregate": args.Aggregate,
+	}
+	return s.getDbaasMysqlMetrics(ctx, "/disk_usage", params)
+}
+
+// GetDbaasMysqlThreadsConnected retrieves current threads connected for a MySQL service.
+func (s *MonitoringServiceOp) GetDbaasMysqlThreadsConnected(ctx context.Context, args *DbaasMysqlServiceMetricsRequest) (*MetricsResponse, *Response, error) {
+	params := map[string]string{
+		"db_id":   args.DBID,
+		"service": args.Service,
+		"start":   fmt.Sprintf("%d", args.Start.Unix()),
+		"end":     fmt.Sprintf("%d", args.End.Unix()),
+	}
+	return s.getDbaasMysqlMetrics(ctx, "/threads_connected", params)
+}
+
+// GetDbaasMysqlThreadsCreatedRate retrieves threads created rate (per second) for a MySQL service.
+func (s *MonitoringServiceOp) GetDbaasMysqlThreadsCreatedRate(ctx context.Context, args *DbaasMysqlServiceMetricsRequest) (*MetricsResponse, *Response, error) {
+	params := map[string]string{
+		"db_id":   args.DBID,
+		"service": args.Service,
+		"start":   fmt.Sprintf("%d", args.Start.Unix()),
+		"end":     fmt.Sprintf("%d", args.End.Unix()),
+	}
+	return s.getDbaasMysqlMetrics(ctx, "/threads_created_rate", params)
+}
+
+// GetDbaasMysqlThreadsActive retrieves active (running) threads for a MySQL service.
+func (s *MonitoringServiceOp) GetDbaasMysqlThreadsActive(ctx context.Context, args *DbaasMysqlServiceMetricsRequest) (*MetricsResponse, *Response, error) {
+	params := map[string]string{
+		"db_id":   args.DBID,
+		"service": args.Service,
+		"start":   fmt.Sprintf("%d", args.Start.Unix()),
+		"end":     fmt.Sprintf("%d", args.End.Unix()),
+	}
+	return s.getDbaasMysqlMetrics(ctx, "/threads_active", params)
+}
+
+// GetDbaasMysqlIndexVsSequentialReads retrieves index vs sequential reads ratio (percent) for a MySQL service.
+func (s *MonitoringServiceOp) GetDbaasMysqlIndexVsSequentialReads(ctx context.Context, args *DbaasMysqlServiceMetricsRequest) (*MetricsResponse, *Response, error) {
+	params := map[string]string{
+		"db_id":   args.DBID,
+		"service": args.Service,
+		"start":   fmt.Sprintf("%d", args.Start.Unix()),
+		"end":     fmt.Sprintf("%d", args.End.Unix()),
+	}
+	return s.getDbaasMysqlMetrics(ctx, "/index_vs_sequential_reads", params)
+}
+
+// GetDbaasMysqlOpRates retrieves operations rate (select, insert, update, delete per second) for a MySQL service.
+func (s *MonitoringServiceOp) GetDbaasMysqlOpRates(ctx context.Context, args *DbaasMysqlOpRatesRequest) (*MetricsResponse, *Response, error) {
+	params := map[string]string{
+		"db_id":   args.DBID,
+		"service": args.Service,
+		"metric":  args.Metric,
+		"start":   fmt.Sprintf("%d", args.Start.Unix()),
+		"end":     fmt.Sprintf("%d", args.End.Unix()),
+	}
+	return s.getDbaasMysqlMetrics(ctx, "/op_rates", params)
+}
+
+// GetDbaasMysqlSchemaThroughput retrieves table I/O throughput (rows/s) for a MySQL schema. Metric: insert, fetch, update, delete.
+func (s *MonitoringServiceOp) GetDbaasMysqlSchemaThroughput(ctx context.Context, args *DbaasMysqlSchemaThroughputRequest) (*MetricsResponse, *Response, error) {
+	params := map[string]string{
+		"db_id":   args.DBID,
+		"service": args.Service,
+		"schema":  args.Schema,
+		"metric":  args.Metric,
+		"start":   fmt.Sprintf("%d", args.Start.Unix()),
+		"end":     fmt.Sprintf("%d", args.End.Unix()),
+	}
+	return s.getDbaasMysqlMetrics(ctx, "/schema_throughput", params)
+}
+
+// GetDbaasMysqlSchemaLatency retrieves table I/O latency (seconds) for a MySQL schema. Metric: insert, fetch, update, delete.
+func (s *MonitoringServiceOp) GetDbaasMysqlSchemaLatency(ctx context.Context, args *DbaasMysqlSchemaLatencyRequest) (*MetricsResponse, *Response, error) {
+	params := map[string]string{
+		"db_id":   args.DBID,
+		"service": args.Service,
+		"schema":  args.Schema,
+		"metric":  args.Metric,
+		"start":   fmt.Sprintf("%d", args.Start.Unix()),
+		"end":     fmt.Sprintf("%d", args.End.Unix()),
+	}
+	return s.getDbaasMysqlMetrics(ctx, "/schema_latency", params)
 }

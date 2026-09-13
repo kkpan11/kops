@@ -42,12 +42,12 @@ func TestServiceAccount(t *testing.T) {
 	// We define a function so we can rebuild the tasks, because we modify in-place when running
 	buildTasks := func() map[string]fi.CloudupTask {
 		serviceAccount := &ServiceAccount{
-			Name:      fi.PtrTo("test"),
+			Name:      new("test"),
 			Lifecycle: fi.LifecycleSync,
 
-			Email:       fi.PtrTo("test@testproject.iam.gserviceaccount.com"),
-			Description: fi.PtrTo("description of ServiceAccount"),
-			DisplayName: fi.PtrTo("display name of ServiceAccount"),
+			Email:       new("test@testproject.iam.gserviceaccount.com"),
+			Description: new("description of ServiceAccount"),
+			DisplayName: new("display name of ServiceAccount"),
 		}
 
 		return map[string]fi.CloudupTask{
@@ -118,8 +118,9 @@ func doDryRun(t *testing.T, ctx context.Context, cloud fi.Cloud, allTasks map[st
 			KubernetesVersion: "v1.23.0",
 		},
 	}
-	assetBuilder := assets.NewAssetBuilder(vfs.Context, cluster.Spec.Assets, cluster.Spec.KubernetesVersion, false)
-	target := fi.NewCloudupDryRunTarget(assetBuilder, os.Stderr)
+	assetBuilder := assets.NewAssetBuilder(vfs.Context, cluster.Spec.Assets, false)
+	checkExisting := true
+	target := fi.NewCloudupDryRunTarget(assetBuilder, checkExisting, os.Stderr)
 	context, err := fi.NewCloudupContext(ctx, fi.DeletionProcessingModeDeleteIncludingDeferred, target, nil, cloud, nil, nil, nil, allTasks)
 	if err != nil {
 		t.Fatalf("error building context: %v", err)

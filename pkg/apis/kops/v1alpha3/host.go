@@ -22,6 +22,8 @@ import (
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:metadata:annotations="api-approved.kubernetes.io=https://github.com/kubernetes/enhancements/pull/1111"
+// +kubebuilder:subresource:status
 
 // Host represents a bare-metal machine that could be registered as a Node.
 type Host struct {
@@ -34,6 +36,9 @@ type Host struct {
 type HostSpec struct {
 	PublicKey     string `json:"publicKey,omitempty"`
 	InstanceGroup string `json:"instanceGroup,omitempty"`
+
+	// PodCIDRs configures the IP ranges to be used for pods on this node/host.
+	PodCIDRs []string `json:"podCIDRs,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

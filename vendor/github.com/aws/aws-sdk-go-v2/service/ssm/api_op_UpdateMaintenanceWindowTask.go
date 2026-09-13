@@ -4,11 +4,8 @@ package ssm
 
 import (
 	"context"
-	"fmt"
-	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/service/ssm/types"
 	"github.com/aws/smithy-go/middleware"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
 // Modifies a task assigned to a maintenance window. You can't change the task
@@ -158,10 +155,10 @@ type UpdateMaintenanceWindowTaskInput struct {
 	// However, for an improved security posture, we strongly recommend creating a
 	// custom policy and custom service role for running your maintenance window tasks.
 	// The policy can be crafted to provide only the permissions needed for your
-	// particular maintenance window tasks. For more information, see [Setting up maintenance windows]in the in the
+	// particular maintenance window tasks. For more information, see [Setting up Maintenance Windows]in the in the
 	// Amazon Web Services Systems Manager User Guide.
 	//
-	// [Setting up maintenance windows]: https://docs.aws.amazon.com/systems-manager/latest/userguide/sysman-maintenance-permissions.html
+	// [Setting up Maintenance Windows]: https://docs.aws.amazon.com/systems-manager/latest/userguide/sysman-maintenance-permissions.html
 	ServiceRoleArn *string
 
 	// The targets (either managed nodes or tags) to modify. Managed nodes are
@@ -253,10 +250,10 @@ type UpdateMaintenanceWindowTaskOutput struct {
 	// However, for an improved security posture, we strongly recommend creating a
 	// custom policy and custom service role for running your maintenance window tasks.
 	// The policy can be crafted to provide only the permissions needed for your
-	// particular maintenance window tasks. For more information, see [Setting up maintenance windows]in the in the
+	// particular maintenance window tasks. For more information, see [Setting up Maintenance Windows]in the in the
 	// Amazon Web Services Systems Manager User Guide.
 	//
-	// [Setting up maintenance windows]: https://docs.aws.amazon.com/systems-manager/latest/userguide/sysman-maintenance-permissions.html
+	// [Setting up Maintenance Windows]: https://docs.aws.amazon.com/systems-manager/latest/userguide/sysman-maintenance-permissions.html
 	ServiceRoleArn *string
 
 	// The updated target values.
@@ -289,9 +286,6 @@ type UpdateMaintenanceWindowTaskOutput struct {
 }
 
 func (c *Client) addOperationUpdateMaintenanceWindowTaskMiddlewares(stack *middleware.Stack, options Options) (err error) {
-	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
-		return err
-	}
 	err = stack.Serialize.Add(&awsAwsjson11_serializeOpUpdateMaintenanceWindowTask{}, middleware.After)
 	if err != nil {
 		return err
@@ -300,19 +294,7 @@ func (c *Client) addOperationUpdateMaintenanceWindowTaskMiddlewares(stack *middl
 	if err != nil {
 		return err
 	}
-	if err := addProtocolFinalizerMiddlewares(stack, options, "UpdateMaintenanceWindowTask"); err != nil {
-		return fmt.Errorf("add protocol finalizers: %v", err)
-	}
 
-	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
-		return err
-	}
-	if err = addSetLoggerMiddleware(stack, options); err != nil {
-		return err
-	}
-	if err = addClientRequestID(stack); err != nil {
-		return err
-	}
 	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
@@ -322,40 +304,13 @@ func (c *Client) addOperationUpdateMaintenanceWindowTaskMiddlewares(stack *middl
 	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetry(stack, options); err != nil {
+	if err = addRecordResponseTiming(stack, options); err != nil {
 		return err
 	}
-	if err = addRawResponseToMetadata(stack); err != nil {
-		return err
-	}
-	if err = addRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack, options); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addTimeOffsetBuild(stack, c); err != nil {
-		return err
-	}
-	if err = addUserAgentRetryMode(stack, options); err != nil {
+	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
 	if err = addOpUpdateMaintenanceWindowTaskValidationMiddleware(stack); err != nil {
-		return err
-	}
-	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opUpdateMaintenanceWindowTask(options.Region), middleware.Before); err != nil {
-		return err
-	}
-	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -370,13 +325,8 @@ func (c *Client) addOperationUpdateMaintenanceWindowTaskMiddlewares(stack *middl
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
-	return nil
-}
-
-func newServiceMetadataMiddleware_opUpdateMaintenanceWindowTask(region string) *awsmiddleware.RegisterServiceMetadata {
-	return &awsmiddleware.RegisterServiceMetadata{
-		Region:        region,
-		ServiceID:     ServiceID,
-		OperationName: "UpdateMaintenanceWindowTask",
+	if err = addInterceptors(stack, options); err != nil {
+		return err
 	}
+	return nil
 }

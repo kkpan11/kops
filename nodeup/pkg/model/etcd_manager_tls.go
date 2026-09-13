@@ -46,7 +46,7 @@ func (b *EtcdManagerTLSBuilder) Build(ctx *fi.NodeupModelBuilderContext) error {
 		keys["etcd-clients-ca"] = "etcd-clients-ca-" + etcdClusterName
 
 		// Because API server can only have a single client certificate for etcd, we need to share a client CA
-		if etcdClusterName == "main" || etcdClusterName == "events" {
+		if etcdClusterName == "main" || etcdClusterName == "events" || etcdClusterName == "leases" {
 			keys["etcd-clients-ca"] = "etcd-clients-ca"
 		}
 
@@ -58,7 +58,7 @@ func (b *EtcdManagerTLSBuilder) Build(ctx *fi.NodeupModelBuilderContext) error {
 				Path:     filepath.Join(d, fileName+".crt"),
 				Contents: fi.NewStringResource(b.NodeupConfig.CAs[keystoreName]),
 				Type:     nodetasks.FileType_File,
-				Mode:     fi.PtrTo("0644"),
+				Mode:     new("0644"),
 			})
 
 		}

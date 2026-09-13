@@ -14,10 +14,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/scaleway/scaleway-sdk-go/internal/errors"
-	"github.com/scaleway/scaleway-sdk-go/internal/marshaler"
-	"github.com/scaleway/scaleway-sdk-go/internal/parameter"
+	"github.com/scaleway/scaleway-sdk-go/errors"
+	"github.com/scaleway/scaleway-sdk-go/marshaler"
 	"github.com/scaleway/scaleway-sdk-go/namegenerator"
+	"github.com/scaleway/scaleway-sdk-go/parameter"
 	"github.com/scaleway/scaleway-sdk-go/scw"
 )
 
@@ -53,7 +53,7 @@ const (
 func (enum ListIPsRequestOrderBy) String() string {
 	if enum == "" {
 		// return default value if empty
-		return "created_at_desc"
+		return string(ListIPsRequestOrderByCreatedAtDesc)
 	}
 	return string(enum)
 }
@@ -87,27 +87,34 @@ func (enum *ListIPsRequestOrderBy) UnmarshalJSON(data []byte) error {
 type ResourceType string
 
 const (
-	ResourceTypeUnknownType         = ResourceType("unknown_type")
-	ResourceTypeInstanceServer      = ResourceType("instance_server")
-	ResourceTypeInstanceIP          = ResourceType("instance_ip")
-	ResourceTypeInstancePrivateNic  = ResourceType("instance_private_nic")
-	ResourceTypeLBServer            = ResourceType("lb_server")
-	ResourceTypeFipIP               = ResourceType("fip_ip")
-	ResourceTypeVpcGateway          = ResourceType("vpc_gateway")
-	ResourceTypeVpcGatewayNetwork   = ResourceType("vpc_gateway_network")
-	ResourceTypeK8sNode             = ResourceType("k8s_node")
-	ResourceTypeK8sCluster          = ResourceType("k8s_cluster")
-	ResourceTypeRdbInstance         = ResourceType("rdb_instance")
-	ResourceTypeRedisCluster        = ResourceType("redis_cluster")
-	ResourceTypeBaremetalServer     = ResourceType("baremetal_server")
-	ResourceTypeBaremetalPrivateNic = ResourceType("baremetal_private_nic")
-	ResourceTypeLlmDeployment       = ResourceType("llm_deployment")
+	ResourceTypeUnknownType            = ResourceType("unknown_type")
+	ResourceTypeCustom                 = ResourceType("custom")
+	ResourceTypeInstanceServer         = ResourceType("instance_server")
+	ResourceTypeInstanceIP             = ResourceType("instance_ip")
+	ResourceTypeInstancePrivateNic     = ResourceType("instance_private_nic")
+	ResourceTypeLBServer               = ResourceType("lb_server")
+	ResourceTypeFipIP                  = ResourceType("fip_ip")
+	ResourceTypeVpcGateway             = ResourceType("vpc_gateway")
+	ResourceTypeVpcGatewayNetwork      = ResourceType("vpc_gateway_network")
+	ResourceTypeK8sNode                = ResourceType("k8s_node")
+	ResourceTypeK8sCluster             = ResourceType("k8s_cluster")
+	ResourceTypeRdbInstance            = ResourceType("rdb_instance")
+	ResourceTypeRedisCluster           = ResourceType("redis_cluster")
+	ResourceTypeBaremetalServer        = ResourceType("baremetal_server")
+	ResourceTypeBaremetalPrivateNic    = ResourceType("baremetal_private_nic")
+	ResourceTypeLlmDeployment          = ResourceType("llm_deployment")
+	ResourceTypeMgdbInstance           = ResourceType("mgdb_instance")
+	ResourceTypeAppleSiliconServer     = ResourceType("apple_silicon_server")
+	ResourceTypeAppleSiliconPrivateNic = ResourceType("apple_silicon_private_nic")
+	ResourceTypeServerlessContainer    = ResourceType("serverless_container")
+	ResourceTypeServerlessFunction     = ResourceType("serverless_function")
+	ResourceTypeVpnGateway             = ResourceType("vpn_gateway")
 )
 
 func (enum ResourceType) String() string {
 	if enum == "" {
 		// return default value if empty
-		return "unknown_type"
+		return string(ResourceTypeUnknownType)
 	}
 	return string(enum)
 }
@@ -115,6 +122,7 @@ func (enum ResourceType) String() string {
 func (enum ResourceType) Values() []ResourceType {
 	return []ResourceType{
 		"unknown_type",
+		"custom",
 		"instance_server",
 		"instance_ip",
 		"instance_private_nic",
@@ -129,6 +137,12 @@ func (enum ResourceType) Values() []ResourceType {
 		"baremetal_server",
 		"baremetal_private_nic",
 		"llm_deployment",
+		"mgdb_instance",
+		"apple_silicon_server",
+		"apple_silicon_private_nic",
+		"serverless_container",
+		"serverless_function",
+		"vpn_gateway",
 	}
 }
 
@@ -269,7 +283,7 @@ func (r *ListIPsResponse) UnsafeGetTotalCount() uint64 {
 
 // UnsafeAppend should not be used
 // Internal usage only
-func (r *ListIPsResponse) UnsafeAppend(res interface{}) (uint64, error) {
+func (r *ListIPsResponse) UnsafeAppend(res any) (uint64, error) {
 	results, ok := res.(*ListIPsResponse)
 	if !ok {
 		return 0, errors.New("%T type cannot be appended to type %T", res, r)
@@ -291,6 +305,7 @@ func NewAPI(client *scw.Client) *API {
 		client: client,
 	}
 }
+
 func (s *API) Regions() []scw.Region {
 	return []scw.Region{scw.RegionFrPar, scw.RegionNlAms, scw.RegionPlWaw}
 }

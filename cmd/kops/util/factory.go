@@ -17,26 +17,30 @@ limitations under the License.
 package util
 
 import (
+	"context"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 
-	certmanager "github.com/cert-manager/cert-manager/pkg/client/clientset/versioned"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/restmapper"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
-	channelscmd "k8s.io/kops/channels/pkg/cmd"
-	gceacls "k8s.io/kops/pkg/acls/gce"
+
+	"k8s.io/kops/pkg/apis/kops"
 	kopsclient "k8s.io/kops/pkg/client/clientset_generated/clientset"
 	"k8s.io/kops/pkg/client/simple"
 	"k8s.io/kops/pkg/client/simple/api"
 	"k8s.io/kops/pkg/client/simple/vfsclientset"
+	"k8s.io/kops/pkg/kubeconfig"
+	"k8s.io/kops/upup/pkg/fi/cloudup"
 	"k8s.io/kops/util/pkg/vfs"
+	gceacls "k8s.io/kops/util/pkg/vfs/acls/gce"
 )
 
 type FactoryOptions struct {
@@ -44,24 +48,38 @@ type FactoryOptions struct {
 }
 
 type Factory struct {
-	ConfigFlags genericclioptions.ConfigFlags
-	options     *FactoryOptions
-	clientset   simple.Clientset
+	options   *FactoryOptions
+	clientset simple.Clientset
 
-	kubernetesClient  kubernetes.Interface
-	certManagerClient certmanager.Interface
-	vfsContext        *vfs.VFSContext
+	vfsContext *vfs.VFSContext
 
-	cachedRESTConfig *rest.Config
-	dynamicClient    dynamic.Interface
-	restMapper       *restmapper.DeferredDiscoveryRESTMapper
+	// mutex protects access to the clusters map
+	mutex sync.Mutex
+	// clusters holds REST connection configuration for connecting to clusters
+	clusters map[string]*clusterInfo
+}
+
+// clusterInfo holds REST connection configuration for connecting to a cluster
+type clusterInfo struct {
+	factory *Factory
+	cluster *kops.Cluster
+
+	cachedHTTPClient    *http.Client
+	cachedRESTConfig    *rest.Config
+	cachedDynamicClient dynamic.Interface
+	kubeconfig.CreateKubecfgOptions
 }
 
 func NewFactory(options *FactoryOptions) *Factory {
 	gceacls.Register()
 
+	if options == nil {
+		options = &FactoryOptions{}
+	}
+
 	return &Factory{
-		options: options,
+		options:  options,
+		clusters: make(map[string]*clusterInfo),
 	}
 }
 
@@ -143,83 +161,89 @@ func (f *Factory) KopsStateStore() string {
 	return f.options.RegistryPath
 }
 
-var _ channelscmd.Factory = &Factory{}
+func (f *Factory) getClusterInfo(cluster *kops.Cluster, options kubeconfig.CreateKubecfgOptions) *clusterInfo {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
 
-func (f *Factory) restConfig() (*rest.Config, error) {
+	key := cluster.ObjectMeta.Name
+	if clusterInfo, ok := f.clusters[key]; ok {
+		return clusterInfo
+	}
+	clusterInfo := &clusterInfo{
+		factory:              f,
+		cluster:              cluster,
+		CreateKubecfgOptions: options,
+	}
+	f.clusters[key] = clusterInfo
+	return clusterInfo
+}
+
+func (f *Factory) RESTConfig(ctx context.Context, cluster *kops.Cluster, options kubeconfig.CreateKubecfgOptions) (*rest.Config, error) {
+	clusterInfo := f.getClusterInfo(cluster, options)
+	return clusterInfo.RESTConfig(ctx)
+}
+
+func (f *clusterInfo) RESTConfig(ctx context.Context) (*rest.Config, error) {
 	if f.cachedRESTConfig == nil {
-		restConfig, err := f.ConfigFlags.ToRESTConfig()
+		restConfig, err := f.factory.buildRESTConfig(ctx, f.cluster, f.CreateKubecfgOptions)
 		if err != nil {
-			return nil, fmt.Errorf("cannot load kubecfg settings: %w", err)
+			return nil, err
 		}
-		restConfig.UserAgent = "kops"
-		restConfig.Burst = 50
-		restConfig.QPS = 20
+
+		configureRESTConfig(restConfig)
+
 		f.cachedRESTConfig = restConfig
 	}
 	return f.cachedRESTConfig, nil
 }
 
-func (f *Factory) KubernetesClient() (kubernetes.Interface, error) {
-	if f.kubernetesClient == nil {
-		restConfig, err := f.restConfig()
-		if err != nil {
-			return nil, err
-		}
-		k8sClient, err := kubernetes.NewForConfig(restConfig)
-		if err != nil {
-			return nil, fmt.Errorf("cannot build kube client: %w", err)
-		}
-		f.kubernetesClient = k8sClient
-	}
-
-	return f.kubernetesClient, nil
+func configureRESTConfig(restConfig *rest.Config) {
+	restConfig.UserAgent = "kops"
+	restConfig.Burst = 50
+	restConfig.QPS = 20
+	restConfig.AcceptContentTypes = runtime.ContentTypeProtobuf
+	restConfig.ContentType = runtime.ContentTypeProtobuf
 }
 
-func (f *Factory) DynamicClient() (dynamic.Interface, error) {
-	if f.dynamicClient == nil {
-		restConfig, err := f.restConfig()
-		if err != nil {
-			return nil, fmt.Errorf("cannot load kubecfg settings: %w", err)
-		}
-		dynamicClient, err := dynamic.NewForConfig(restConfig)
-		if err != nil {
-			return nil, fmt.Errorf("cannot build dynamicClient client: %v", err)
-		}
-		f.dynamicClient = dynamicClient
-	}
-
-	return f.dynamicClient, nil
+func (f *Factory) HTTPClient(restConfig *rest.Config) (*http.Client, error) {
+	return rest.HTTPClientFor(restConfig)
 }
 
-func (f *Factory) CertManagerClient() (certmanager.Interface, error) {
-	if f.certManagerClient == nil {
-		restConfig, err := f.restConfig()
+func (f *clusterInfo) HTTPClient(restConfig *rest.Config) (*http.Client, error) {
+	if f.cachedHTTPClient == nil {
+		httpClient, err := rest.HTTPClientFor(restConfig)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("building http client: %w", err)
 		}
-		certManagerClient, err := certmanager.NewForConfig(restConfig)
-		if err != nil {
-			return nil, fmt.Errorf("cannot build kube client: %v", err)
-		}
-		f.certManagerClient = certManagerClient
+		f.cachedHTTPClient = httpClient
 	}
-
-	return f.certManagerClient, nil
+	return f.cachedHTTPClient, nil
 }
 
-func (f *Factory) RESTMapper() (*restmapper.DeferredDiscoveryRESTMapper, error) {
-	if f.restMapper == nil {
-		discoveryClient, err := f.ConfigFlags.ToDiscoveryClient()
+// DynamicClient returns a dynamic client
+func (f *Factory) DynamicClient(ctx context.Context, cluster *kops.Cluster, options kubeconfig.CreateKubecfgOptions) (dynamic.Interface, error) {
+	clusterInfo := f.getClusterInfo(cluster, options)
+	restConfig, err := clusterInfo.RESTConfig(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return clusterInfo.DynamicClient(restConfig)
+}
+
+func (f *clusterInfo) DynamicClient(restConfig *rest.Config) (dynamic.Interface, error) {
+	if f.cachedDynamicClient == nil {
+		httpClient, err := f.HTTPClient(restConfig)
 		if err != nil {
 			return nil, err
 		}
 
-		restMapper := restmapper.NewDeferredDiscoveryRESTMapper(discoveryClient)
-
-		f.restMapper = restMapper
+		dynamicClient, err := dynamic.NewForConfigAndClient(restConfig, httpClient)
+		if err != nil {
+			return nil, fmt.Errorf("building dynamic client: %w", err)
+		}
+		f.cachedDynamicClient = dynamicClient
 	}
-
-	return f.restMapper, nil
+	return f.cachedDynamicClient, nil
 }
 
 func (f *Factory) VFSContext() *vfs.VFSContext {
@@ -228,4 +252,70 @@ func (f *Factory) VFSContext() *vfs.VFSContext {
 		f.vfsContext = vfs.Context
 	}
 	return f.vfsContext
+}
+
+func (f *Factory) buildRESTConfig(ctx context.Context, cluster *kops.Cluster, options kubeconfig.CreateKubecfgOptions) (*rest.Config, error) {
+	clientset, err := f.KopsClient()
+	if err != nil {
+		return nil, err
+	}
+
+	keyStore, err := clientset.KeyStore(cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	secretStore, err := clientset.SecretStore(cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	cloud, err := cloudup.BuildCloud(cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	// backwards compatibility
+	if options.Admin == 0 {
+		options.Admin = kubeconfig.DefaultKubecfgAdminLifetime
+	}
+
+	if options.UseKubeconfig {
+		// Get the kubeconfig from the context
+		klog.Infof("--use-kubeconfig is set; loading connectivity information from kubeconfig (instead of generating it)")
+
+		clusterName := cluster.ObjectMeta.Name
+
+		clientGetter := genericclioptions.NewConfigFlags(true)
+		contextName := clusterName
+		clientGetter.Context = &contextName
+
+		restConfig, err := clientGetter.ToRESTConfig()
+		if err != nil {
+			return nil, fmt.Errorf("loading kubecfg settings for %q: %w", clusterName, err)
+		}
+
+		configureRESTConfig(restConfig)
+
+		if options.OverrideAPIServer != "" {
+			klog.Infof("overriding API server with %q", options.OverrideAPIServer)
+			restConfig.Host = options.OverrideAPIServer
+		}
+
+		return restConfig, nil
+	}
+
+	conf, err := kubeconfig.BuildKubecfg(
+		ctx,
+		cluster,
+		keyStore,
+		secretStore,
+		cloud,
+		options,
+		f.KopsStateStore())
+	if err != nil {
+		return nil, err
+	}
+
+	return conf.ToRESTConfig()
 }

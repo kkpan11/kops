@@ -56,7 +56,7 @@ func (o *LifecycleTestOptions) AddDefaults() {
 		o.Version = "v1alpha2"
 	}
 	if o.ClusterName == "" {
-		o.ClusterName = strings.Replace(o.SrcDir, "_", "", -1) + ".example.com"
+		o.ClusterName = strings.ReplaceAll(o.SrcDir, "_", "") + ".example.com"
 	}
 
 	o.SrcDir = "../../tests/integration/update_cluster/" + o.SrcDir
@@ -102,11 +102,11 @@ func TestLifecyclePrivateCalico(t *testing.T) {
 	})
 }
 
-// TestLifecyclePrivateKopeio runs the test on a private topology, with kopeio networking
-func TestLifecyclePrivateKopeio(t *testing.T) {
+// TestLifecyclePrivateSharedNAT runs the test on a private topology, with shared NAT gateways
+func TestLifecyclePrivateSharedNAT(t *testing.T) {
 	runLifecycleTestAWS(&LifecycleTestOptions{
 		t:      t,
-		SrcDir: "privatekopeio",
+		SrcDir: "private-shared-nat",
 		Shared: []string{"nat-a2345678", "nat-b2345678"},
 	})
 }
@@ -371,11 +371,12 @@ func runLifecycleTestAWS(o *LifecycleTestOptions) {
 	o.AddDefaults()
 
 	t := o.t
+	t.Setenv("KOPS_RUN_TOO_NEW_VERSION", "1")
 
 	h := testutils.NewIntegrationTestHarness(o.t)
 	defer h.Close()
 
-	h.MockKopsVersion("1.21.0-alpha.1")
+	h.MockKopsVersion(integrationTestKopsVersion)
 	cloud := h.SetupMockAWS()
 
 	var beforeIds []string
@@ -401,17 +402,13 @@ func runLifecycleTestOpenstack(o *LifecycleTestOptions) {
 	o.AddDefaults()
 
 	t := o.t
+	t.Setenv("KOPS_RUN_TOO_NEW_VERSION", "1")
+	t.Setenv("OS_REGION_NAME", "us-test1")
 
 	h := testutils.NewIntegrationTestHarness(o.t)
 	defer h.Close()
 
-	origRegion := os.Getenv("OS_REGION_NAME")
-	os.Setenv("OS_REGION_NAME", "us-test1")
-	defer func() {
-		os.Setenv("OS_REGION_NAME", origRegion)
-	}()
-
-	h.MockKopsVersion("1.21.0-alpha.1")
+	h.MockKopsVersion(integrationTestKopsVersion)
 	cloud := testutils.SetupMockOpenstack()
 
 	var beforeIds []string
@@ -459,11 +456,12 @@ func runLifecycleTestGCE(o *LifecycleTestOptions) {
 	o.AddDefaults()
 
 	t := o.t
+	t.Setenv("KOPS_RUN_TOO_NEW_VERSION", "1")
 
 	h := testutils.NewIntegrationTestHarness(o.t)
 	defer h.Close()
 
-	h.MockKopsVersion("1.21.0-alpha.1")
+	h.MockKopsVersion(integrationTestKopsVersion)
 
 	cloud := h.SetupMockGCE()
 

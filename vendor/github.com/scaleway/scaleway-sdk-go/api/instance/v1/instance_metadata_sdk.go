@@ -2,23 +2,25 @@ package instance
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"math/rand"
 	"net"
 	"net/http"
 	"strconv"
 	"time"
 
-	"github.com/scaleway/scaleway-sdk-go/internal/errors"
+	"github.com/scaleway/scaleway-sdk-go/errors"
+	"github.com/scaleway/scaleway-sdk-go/logger"
 )
 
-var (
-	metadataRetryBindPort = 200
-)
+var metadataRetryBindPort = 200
 
-const metadataAPIv4 = "http://169.254.42.42"
-const metadataAPIv6 = "http://[fd00:42::42]"
+const (
+	metadataAPIv4 = "http://169.254.42.42"
+	metadataAPIv6 = "http://[fd00:42::42]"
+)
 
 // MetadataAPI metadata API
 type MetadataAPI struct {
@@ -30,25 +32,37 @@ func NewMetadataAPI() *MetadataAPI {
 	return &MetadataAPI{}
 }
 
-func (meta *MetadataAPI) getMetadataUrl() string {
+func (meta *MetadataAPI) getMetadataURL() string {
 	if meta.MetadataURL != nil {
 		return *meta.MetadataURL
 	}
 
+	ctx := context.Background()
 	for _, url := range []string{metadataAPIv4, metadataAPIv6} {
 		http.DefaultClient.Timeout = 3 * time.Second
-		resp, err := http.Get(url)
-		if err == nil && resp.StatusCode == 200 {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, bytes.NewBufferString(""))
+		if err != nil {
+			logger.Warningf("Failed to create metadata URL %s: %v", url, err)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err == nil && resp.StatusCode == http.StatusOK {
 			meta.MetadataURL = &url
 			return url
 		}
+		defer resp.Body.Close()
 	}
 	return metadataAPIv4
 }
 
 // GetMetadata returns the metadata available from the server
 func (meta *MetadataAPI) GetMetadata() (m *Metadata, err error) {
-	resp, err := http.Get(meta.getMetadataUrl() + "/conf?format=json")
+	ctx := context.Background()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, meta.getMetadataURL()+"/conf?format=json", bytes.NewBufferString(""))
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, errors.Wrap(err, "error getting metadataURL")
 	}
@@ -82,7 +96,8 @@ type Metadata struct {
 	Organization   string `json:"organization,omitempty"`
 	Project        string `json:"project,omitempty"`
 	CommercialType string `json:"commercial_type,omitempty"`
-	//PublicIP IPv4 only
+	Image          Image  `json:"image,omitempty"`
+	// PublicIP IPv4 only
 	PublicIP struct {
 		ID               string `json:"id"`
 		Address          string `json:"address"`
@@ -156,11 +171,42 @@ type Metadata struct {
 		CreationDate     string `json:"creation_date,omitempty"`
 		Zone             string `json:"zone,omitempty"`
 	} `json:"private_nics,omitempty"`
+	MACAddress    string `json:"mac_address,omitempty"`
+	EndOfService  bool   `json:"end_of_service,omitempty"`
+	Protected     bool   `json:"protected,omitempty"`
+	SecurityGroup struct {
+		ID   string `json:"id,omitempty"`
+		Name string `json:"name,omitempty"`
+	} `json:"security_group,omitempty"`
+	State          string   `json:"state,omitempty"`
+	Arch           string   `json:"arch,omitempty"`
+	AllowedActions []string `json:"allowed_actions,omitempty"`
+	FileSystems    []struct {
+		FileSystemID string `json:"filesystem_id,omitempty"`
+		State        string `json:"state,omitempty"`
+	}
+	CreatedAt         string `json:"creation_date,omitempty"`
+	UpdatedAt         string `json:"modification_date,omitempty"`
+	Zone              string `json:"zone,omitempty"`
+	EnableIPv6        bool   `json:"enable_ipv6,omitempty"`
+	DynamicIPRequired bool   `json:"dynamic_ip_required,omitempty"`
+	PlacementGroup    struct {
+		ID              string   `json:"id,omitempty"`
+		Name            string   `json:"name,omitempty"`
+		Organization    string   `json:"organization,omitempty"`
+		Project         string   `json:"project,omitempty"`
+		PolicyMode      string   `json:"policy_mode,omitempty"`
+		PolicyType      string   `json:"policy_type,omitempty"`
+		PolicyRespected bool     `json:"policy_respected,omitempty"`
+		Tags            []string `json:"tags,omitempty"`
+		Zone            string   `json:"zone,omitempty"`
+	} `json:"placement_group,omitempty"`
 }
 
 // ListUserData returns the metadata available from the server
 func (meta *MetadataAPI) ListUserData() (res *UserData, err error) {
 	retries := 0
+	ctx := context.Background()
 	for retries <= metadataRetryBindPort {
 		port := rand.Intn(1024)
 		localTCPAddr, err := net.ResolveTCPAddr("tcp", ":"+strconv.Itoa(port))
@@ -178,7 +224,11 @@ func (meta *MetadataAPI) ListUserData() (res *UserData, err error) {
 			},
 		}
 
-		resp, err := userdataClient.Get(meta.getMetadataUrl() + "/user_data?format=json")
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, meta.getMetadataURL()+"/user_data?format=json", bytes.NewBufferString(""))
+		if err != nil {
+			return nil, err
+		}
+		resp, err := userdataClient.Do(req)
 		if err != nil {
 			retries++ // retry with a different source port
 			continue
@@ -201,6 +251,7 @@ func (meta *MetadataAPI) GetUserData(key string) ([]byte, error) {
 		return make([]byte, 0), errors.New("key must not be empty in GetUserData")
 	}
 
+	ctx := context.Background()
 	retries := 0
 	for retries <= metadataRetryBindPort {
 		port := rand.Intn(1024)
@@ -219,14 +270,19 @@ func (meta *MetadataAPI) GetUserData(key string) ([]byte, error) {
 			},
 		}
 
-		resp, err := userdataClient.Get(meta.getMetadataUrl() + "/user_data/" + key)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, meta.getMetadataURL()+"/user_data/"+key, bytes.NewBufferString(""))
+		if err != nil {
+			return nil, err
+		}
+
+		resp, err := userdataClient.Do(req)
 		if err != nil {
 			retries++ // retry with a different source port
 			continue
 		}
 		defer resp.Body.Close()
 
-		body, err := ioutil.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return make([]byte, 0), errors.Wrap(err, "error reading userdata body")
 		}
@@ -242,6 +298,7 @@ func (meta *MetadataAPI) SetUserData(key string, value []byte) error {
 		return errors.New("key must not be empty in SetUserData")
 	}
 
+	ctx := context.Background()
 	retries := 0
 	for retries <= metadataRetryBindPort {
 		port := rand.Intn(1024)
@@ -259,16 +316,17 @@ func (meta *MetadataAPI) SetUserData(key string, value []byte) error {
 				}).DialContext,
 			},
 		}
-		request, err := http.NewRequest("PATCH", meta.getMetadataUrl()+"/user_data/"+key, bytes.NewBuffer(value))
+		request, err := http.NewRequestWithContext(ctx, http.MethodPatch, meta.getMetadataURL()+"/user_data/"+key, bytes.NewBuffer(value))
 		if err != nil {
 			return errors.Wrap(err, "error creating patch userdata request")
 		}
 		request.Header.Set("Content-Type", "text/plain")
-		_, err = userdataClient.Do(request)
+		resp, err := userdataClient.Do(request)
 		if err != nil {
 			retries++ // retry with a different source port
 			continue
 		}
+		defer resp.Body.Close()
 
 		return nil
 	}
@@ -281,6 +339,7 @@ func (meta *MetadataAPI) DeleteUserData(key string) error {
 		return errors.New("key must not be empty in DeleteUserData")
 	}
 
+	ctx := context.Background()
 	retries := 0
 	for retries <= metadataRetryBindPort {
 		port := rand.Intn(1024)
@@ -298,15 +357,16 @@ func (meta *MetadataAPI) DeleteUserData(key string) error {
 				}).DialContext,
 			},
 		}
-		request, err := http.NewRequest("DELETE", meta.getMetadataUrl()+"/user_data/"+key, bytes.NewBuffer([]byte("")))
+		request, err := http.NewRequestWithContext(ctx, http.MethodDelete, meta.getMetadataURL()+"/user_data/"+key, bytes.NewBufferString(""))
 		if err != nil {
 			return errors.Wrap(err, "error creating delete userdata request")
 		}
-		_, err = userdataClient.Do(request)
+		resp, err := userdataClient.Do(request)
 		if err != nil {
 			retries++ // retry with a different source port
 			continue
 		}
+		defer resp.Body.Close()
 
 		return nil
 	}

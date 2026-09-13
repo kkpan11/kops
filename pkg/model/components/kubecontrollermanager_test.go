@@ -25,7 +25,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	api "k8s.io/kops/pkg/apis/kops"
 	"k8s.io/kops/pkg/assets"
-	"k8s.io/kops/upup/pkg/fi"
 	"k8s.io/kops/util/pkg/vfs"
 )
 
@@ -47,7 +46,7 @@ func Test_Build_KCM_Builder(t *testing.T) {
 
 		c := buildCluster()
 		c.Spec.KubernetesVersion = v
-		b := assets.NewAssetBuilder(vfs.Context, c.Spec.Assets, c.Spec.KubernetesVersion, false)
+		b := assets.NewAssetBuilder(vfs.Context, c.Spec.Assets, false)
 
 		kcm := &KubeControllerManagerOptionsBuilder{
 			OptionsContext: &OptionsContext{
@@ -68,7 +67,7 @@ func Test_Build_KCM_Builder(t *testing.T) {
 
 func Test_Build_KCM_Builder_Change_Duration(t *testing.T) {
 	c := buildCluster()
-	b := assets.NewAssetBuilder(vfs.Context, c.Spec.Assets, c.Spec.KubernetesVersion, false)
+	b := assets.NewAssetBuilder(vfs.Context, c.Spec.Assets, false)
 
 	kcm := &KubeControllerManagerOptionsBuilder{
 		OptionsContext: &OptionsContext{
@@ -104,46 +103,46 @@ func Test_Build_KCM_Builder_CIDR_Mask_Size(t *testing.T) {
 		},
 		{
 			PodCIDR:          "2001:DB8::/32",
-			ExpectedMaskSize: fi.PtrTo(int32(48)),
+			ExpectedMaskSize: new(int32(48)),
 		},
 		{
 			PodCIDR:          "2001:DB8::/65",
-			ExpectedMaskSize: fi.PtrTo(int32(81)),
+			ExpectedMaskSize: new(int32(81)),
 		},
 		{
 			PodCIDR:          "2001:DB8::/32",
 			ClusterCIDR:      "2001:DB8::/65",
-			ExpectedMaskSize: fi.PtrTo(int32(81)),
+			ExpectedMaskSize: new(int32(81)),
 		},
 		{
 			PodCIDR:          "2001:DB8::/95",
-			ExpectedMaskSize: fi.PtrTo(int32(111)),
+			ExpectedMaskSize: new(int32(111)),
 		},
 		{
 			PodCIDR:          "2001:DB8::/96",
-			ExpectedMaskSize: fi.PtrTo(int32(112)),
+			ExpectedMaskSize: new(int32(112)),
 		},
 		{
 			PodCIDR:          "2001:DB8::/97",
-			ExpectedMaskSize: fi.PtrTo(int32(112)),
+			ExpectedMaskSize: new(int32(112)),
 		},
 		{
 			PodCIDR:          "2001:DB8::/98",
-			ExpectedMaskSize: fi.PtrTo(int32(113)),
+			ExpectedMaskSize: new(int32(113)),
 		},
 		{
 			PodCIDR:          "2001:DB8::/99",
-			ExpectedMaskSize: fi.PtrTo(int32(113)),
+			ExpectedMaskSize: new(int32(113)),
 		},
 		{
 			PodCIDR:          "2001:DB8::/100",
-			ExpectedMaskSize: fi.PtrTo(int32(114)),
+			ExpectedMaskSize: new(int32(114)),
 		},
 	}
 	for _, tc := range grid {
 		t.Run(tc.PodCIDR+":"+tc.ClusterCIDR, func(t *testing.T) {
 			c := buildCluster()
-			b := assets.NewAssetBuilder(vfs.Context, c.Spec.Assets, c.Spec.KubernetesVersion, false)
+			b := assets.NewAssetBuilder(vfs.Context, c.Spec.Assets, false)
 
 			kcm := &KubeControllerManagerOptionsBuilder{
 				OptionsContext: &OptionsContext{

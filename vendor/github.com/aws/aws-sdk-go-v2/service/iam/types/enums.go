@@ -22,6 +22,25 @@ func (AccessAdvisorUsageGranularityType) Values() []AccessAdvisorUsageGranularit
 	}
 }
 
+type AssertionEncryptionModeType string
+
+// Enum values for AssertionEncryptionModeType
+const (
+	AssertionEncryptionModeTypeRequired AssertionEncryptionModeType = "Required"
+	AssertionEncryptionModeTypeAllowed  AssertionEncryptionModeType = "Allowed"
+)
+
+// Values returns all known values for AssertionEncryptionModeType. Note that this
+// can be expanded in the future, and so it is only as up to date as the client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
+func (AssertionEncryptionModeType) Values() []AssertionEncryptionModeType {
+	return []AssertionEncryptionModeType{
+		"Required",
+		"Allowed",
+	}
+}
+
 type AssignmentStatusType string
 
 // Enum values for AssignmentStatusType
@@ -40,6 +59,27 @@ func (AssignmentStatusType) Values() []AssignmentStatusType {
 		"Assigned",
 		"Unassigned",
 		"Any",
+	}
+}
+
+type AttachmentType string
+
+// Enum values for AttachmentType
+const (
+	AttachmentTypeUser  AttachmentType = "user"
+	AttachmentTypeGroup AttachmentType = "group"
+	AttachmentTypeRole  AttachmentType = "role"
+)
+
+// Values returns all known values for AttachmentType. Note that this can be
+// expanded in the future, and so it is only as up to date as the client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
+func (AttachmentType) Values() []AttachmentType {
+	return []AttachmentType{
+		"user",
+		"group",
+		"role",
 	}
 }
 
@@ -149,6 +189,25 @@ func (EntityType) Values() []EntityType {
 	}
 }
 
+type FeatureType string
+
+// Enum values for FeatureType
+const (
+	FeatureTypeRootCredentialsManagement FeatureType = "RootCredentialsManagement"
+	FeatureTypeRootSessions              FeatureType = "RootSessions"
+)
+
+// Values returns all known values for FeatureType. Note that this can be expanded
+// in the future, and so it is only as up to date as the client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
+func (FeatureType) Values() []FeatureType {
+	return []FeatureType{
+		"RootCredentialsManagement",
+		"RootSessions",
+	}
+}
+
 type GlobalEndpointTokenVersion string
 
 // Enum values for GlobalEndpointTokenVersion
@@ -185,6 +244,92 @@ func (JobStatusType) Values() []JobStatusType {
 	return []JobStatusType{
 		"IN_PROGRESS",
 		"COMPLETED",
+		"FAILED",
+	}
+}
+
+type ManagedByTypeType string
+
+// Enum values for ManagedByTypeType
+const (
+	ManagedByTypeTypeService ManagedByTypeType = "Service"
+)
+
+// Values returns all known values for ManagedByTypeType. Note that this can be
+// expanded in the future, and so it is only as up to date as the client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
+func (ManagedByTypeType) Values() []ManagedByTypeType {
+	return []ManagedByTypeType{
+		"Service",
+	}
+}
+
+type ParameterTypeType string
+
+// Enum values for ParameterTypeType
+const (
+	ParameterTypeTypeString     ParameterTypeType = "String"
+	ParameterTypeTypeStringList ParameterTypeType = "StringList"
+	ParameterTypeTypeNumber     ParameterTypeType = "Number"
+	ParameterTypeTypeNumberList ParameterTypeType = "NumberList"
+	ParameterTypeTypeArn        ParameterTypeType = "Arn"
+	ParameterTypeTypeArnList    ParameterTypeType = "ArnList"
+)
+
+// Values returns all known values for ParameterTypeType. Note that this can be
+// expanded in the future, and so it is only as up to date as the client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
+func (ParameterTypeType) Values() []ParameterTypeType {
+	return []ParameterTypeType{
+		"String",
+		"StringList",
+		"Number",
+		"NumberList",
+		"Arn",
+		"ArnList",
+	}
+}
+
+type PermissionCheckResultType string
+
+// Enum values for PermissionCheckResultType
+const (
+	PermissionCheckResultTypeAllowed PermissionCheckResultType = "ALLOWED"
+	PermissionCheckResultTypeDenied  PermissionCheckResultType = "DENIED"
+	PermissionCheckResultTypeUnsure  PermissionCheckResultType = "UNSURE"
+)
+
+// Values returns all known values for PermissionCheckResultType. Note that this
+// can be expanded in the future, and so it is only as up to date as the client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
+func (PermissionCheckResultType) Values() []PermissionCheckResultType {
+	return []PermissionCheckResultType{
+		"ALLOWED",
+		"DENIED",
+		"UNSURE",
+	}
+}
+
+type PermissionCheckStatusType string
+
+// Enum values for PermissionCheckStatusType
+const (
+	PermissionCheckStatusTypeComplete   PermissionCheckStatusType = "COMPLETE"
+	PermissionCheckStatusTypeInProgress PermissionCheckStatusType = "IN_PROGRESS"
+	PermissionCheckStatusTypeFailed     PermissionCheckStatusType = "FAILED"
+)
+
+// Values returns all known values for PermissionCheckStatusType. Note that this
+// can be expanded in the future, and so it is only as up to date as the client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
+func (PermissionCheckStatusType) Values() []PermissionCheckStatusType {
+	return []PermissionCheckStatusType{
+		"COMPLETE",
+		"IN_PROGRESS",
 		"FAILED",
 	}
 }
@@ -229,6 +374,33 @@ func (PolicyEvaluationDecisionType) Values() []PolicyEvaluationDecisionType {
 	}
 }
 
+type PolicyIdentifierPolicyType string
+
+// Enum values for PolicyIdentifierPolicyType
+const (
+	PolicyIdentifierPolicyTypeInline             PolicyIdentifierPolicyType = "inline"
+	PolicyIdentifierPolicyTypeAwsManaged         PolicyIdentifierPolicyType = "aws-managed"
+	PolicyIdentifierPolicyTypeUserManaged        PolicyIdentifierPolicyType = "user-managed"
+	PolicyIdentifierPolicyTypePermissionBoundary PolicyIdentifierPolicyType = "permission-boundary"
+	PolicyIdentifierPolicyTypeScp                PolicyIdentifierPolicyType = "scp"
+	PolicyIdentifierPolicyTypeRcp                PolicyIdentifierPolicyType = "rcp"
+)
+
+// Values returns all known values for PolicyIdentifierPolicyType. Note that this
+// can be expanded in the future, and so it is only as up to date as the client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
+func (PolicyIdentifierPolicyType) Values() []PolicyIdentifierPolicyType {
+	return []PolicyIdentifierPolicyType{
+		"inline",
+		"aws-managed",
+		"user-managed",
+		"permission-boundary",
+		"scp",
+		"rcp",
+	}
+}
+
 type PolicyOwnerEntityType string
 
 // Enum values for PolicyOwnerEntityType
@@ -247,6 +419,25 @@ func (PolicyOwnerEntityType) Values() []PolicyOwnerEntityType {
 		"USER",
 		"ROLE",
 		"GROUP",
+	}
+}
+
+type PolicyParameterTypeEnum string
+
+// Enum values for PolicyParameterTypeEnum
+const (
+	PolicyParameterTypeEnumString     PolicyParameterTypeEnum = "string"
+	PolicyParameterTypeEnumStringList PolicyParameterTypeEnum = "stringList"
+)
+
+// Values returns all known values for PolicyParameterTypeEnum. Note that this can
+// be expanded in the future, and so it is only as up to date as the client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
+func (PolicyParameterTypeEnum) Values() []PolicyParameterTypeEnum {
+	return []PolicyParameterTypeEnum{
+		"string",
+		"stringList",
 	}
 }
 
@@ -399,12 +590,42 @@ func (SortKeyType) Values() []SortKeyType {
 	}
 }
 
+type StateType string
+
+// Enum values for StateType
+const (
+	StateTypeUnassigned      StateType = "UNASSIGNED"
+	StateTypeAssigned        StateType = "ASSIGNED"
+	StateTypePendingApproval StateType = "PENDING_APPROVAL"
+	StateTypeFinalized       StateType = "FINALIZED"
+	StateTypeAccepted        StateType = "ACCEPTED"
+	StateTypeRejected        StateType = "REJECTED"
+	StateTypeExpired         StateType = "EXPIRED"
+)
+
+// Values returns all known values for StateType. Note that this can be expanded
+// in the future, and so it is only as up to date as the client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
+func (StateType) Values() []StateType {
+	return []StateType{
+		"UNASSIGNED",
+		"ASSIGNED",
+		"PENDING_APPROVAL",
+		"FINALIZED",
+		"ACCEPTED",
+		"REJECTED",
+		"EXPIRED",
+	}
+}
+
 type StatusType string
 
 // Enum values for StatusType
 const (
 	StatusTypeActive   StatusType = "Active"
 	StatusTypeInactive StatusType = "Inactive"
+	StatusTypeExpired  StatusType = "Expired"
 )
 
 // Values returns all known values for StatusType. Note that this can be expanded
@@ -415,6 +636,7 @@ func (StatusType) Values() []StatusType {
 	return []StatusType{
 		"Active",
 		"Inactive",
+		"Expired",
 	}
 }
 
@@ -437,6 +659,7 @@ const (
 	SummaryKeyTypeMFADevicesInUse                   SummaryKeyType = "MFADevicesInUse"
 	SummaryKeyTypeAccountMFAEnabled                 SummaryKeyType = "AccountMFAEnabled"
 	SummaryKeyTypeAccountAccessKeysPresent          SummaryKeyType = "AccountAccessKeysPresent"
+	SummaryKeyTypeAccountPasswordPresent            SummaryKeyType = "AccountPasswordPresent"
 	SummaryKeyTypeAccountSigningCertificatesPresent SummaryKeyType = "AccountSigningCertificatesPresent"
 	SummaryKeyTypeAttachedPoliciesPerGroupQuota     SummaryKeyType = "AttachedPoliciesPerGroupQuota"
 	SummaryKeyTypeAttachedPoliciesPerRoleQuota      SummaryKeyType = "AttachedPoliciesPerRoleQuota"
@@ -448,6 +671,13 @@ const (
 	SummaryKeyTypePolicyVersionsInUseQuota          SummaryKeyType = "PolicyVersionsInUseQuota"
 	SummaryKeyTypeVersionsPerPolicyQuota            SummaryKeyType = "VersionsPerPolicyQuota"
 	SummaryKeyTypeGlobalEndpointTokenVersion        SummaryKeyType = "GlobalEndpointTokenVersion"
+	SummaryKeyTypeAssumeRolePolicySizeQuota         SummaryKeyType = "AssumeRolePolicySizeQuota"
+	SummaryKeyTypeInstanceProfiles                  SummaryKeyType = "InstanceProfiles"
+	SummaryKeyTypeInstanceProfilesQuota             SummaryKeyType = "InstanceProfilesQuota"
+	SummaryKeyTypeProviders                         SummaryKeyType = "Providers"
+	SummaryKeyTypeRolePolicySizeQuota               SummaryKeyType = "RolePolicySizeQuota"
+	SummaryKeyTypeRoles                             SummaryKeyType = "Roles"
+	SummaryKeyTypeRolesQuota                        SummaryKeyType = "RolesQuota"
 )
 
 // Values returns all known values for SummaryKeyType. Note that this can be
@@ -471,6 +701,7 @@ func (SummaryKeyType) Values() []SummaryKeyType {
 		"MFADevicesInUse",
 		"AccountMFAEnabled",
 		"AccountAccessKeysPresent",
+		"AccountPasswordPresent",
 		"AccountSigningCertificatesPresent",
 		"AttachedPoliciesPerGroupQuota",
 		"AttachedPoliciesPerRoleQuota",
@@ -482,5 +713,35 @@ func (SummaryKeyType) Values() []SummaryKeyType {
 		"PolicyVersionsInUseQuota",
 		"VersionsPerPolicyQuota",
 		"GlobalEndpointTokenVersion",
+		"AssumeRolePolicySizeQuota",
+		"InstanceProfiles",
+		"InstanceProfilesQuota",
+		"Providers",
+		"RolePolicySizeQuota",
+		"Roles",
+		"RolesQuota",
+	}
+}
+
+type SummaryStateType string
+
+// Enum values for SummaryStateType
+const (
+	SummaryStateTypeAvailable    SummaryStateType = "AVAILABLE"
+	SummaryStateTypeNotAvailable SummaryStateType = "NOT_AVAILABLE"
+	SummaryStateTypeNotSupported SummaryStateType = "NOT_SUPPORTED"
+	SummaryStateTypeFailed       SummaryStateType = "FAILED"
+)
+
+// Values returns all known values for SummaryStateType. Note that this can be
+// expanded in the future, and so it is only as up to date as the client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
+func (SummaryStateType) Values() []SummaryStateType {
+	return []SummaryStateType{
+		"AVAILABLE",
+		"NOT_AVAILABLE",
+		"NOT_SUPPORTED",
+		"FAILED",
 	}
 }

@@ -4,11 +4,8 @@ package eventbridge
 
 import (
 	"context"
-	"fmt"
-	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/service/eventbridge/types"
 	"github.com/aws/smithy-go/middleware"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
 	"time"
 )
 
@@ -60,7 +57,9 @@ type DescribeEventBusOutput struct {
 	// Configuration details of the Amazon SQS queue for EventBridge to use as a
 	// dead-letter queue (DLQ).
 	//
-	// For more information, see Event retry policy and using dead-letter queues in the EventBridge User Guide.
+	// For more information, see [Using dead-letter queues to process undelivered events] in the EventBridge User Guide.
+	//
+	// [Using dead-letter queues to process undelivered events]: https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-rule-event-delivery.html#eb-rule-dlq
 	DeadLetterConfig *types.DeadLetterConfig
 
 	// The event bus description.
@@ -77,6 +76,13 @@ type DescribeEventBusOutput struct {
 	// The time the event bus was last modified.
 	LastModifiedTime *time.Time
 
+	// The logging configuration settings for the event bus.
+	//
+	// For more information, see [Configuring logs for event buses] in the EventBridge User Guide.
+	//
+	// [Configuring logs for event buses]: https://docs.aws.amazon.com/eb-event-bus-logs.html
+	LogConfig *types.LogConfig
+
 	// The name of the event bus. Currently, this is always default .
 	Name *string
 
@@ -90,9 +96,6 @@ type DescribeEventBusOutput struct {
 }
 
 func (c *Client) addOperationDescribeEventBusMiddlewares(stack *middleware.Stack, options Options) (err error) {
-	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
-		return err
-	}
 	err = stack.Serialize.Add(&awsAwsjson11_serializeOpDescribeEventBus{}, middleware.After)
 	if err != nil {
 		return err
@@ -101,19 +104,7 @@ func (c *Client) addOperationDescribeEventBusMiddlewares(stack *middleware.Stack
 	if err != nil {
 		return err
 	}
-	if err := addProtocolFinalizerMiddlewares(stack, options, "DescribeEventBus"); err != nil {
-		return fmt.Errorf("add protocol finalizers: %v", err)
-	}
 
-	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
-		return err
-	}
-	if err = addSetLoggerMiddleware(stack, options); err != nil {
-		return err
-	}
-	if err = addClientRequestID(stack); err != nil {
-		return err
-	}
 	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
@@ -123,37 +114,10 @@ func (c *Client) addOperationDescribeEventBusMiddlewares(stack *middleware.Stack
 	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetry(stack, options); err != nil {
+	if err = addRecordResponseTiming(stack, options); err != nil {
 		return err
 	}
-	if err = addRawResponseToMetadata(stack); err != nil {
-		return err
-	}
-	if err = addRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack, options); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addTimeOffsetBuild(stack, c); err != nil {
-		return err
-	}
-	if err = addUserAgentRetryMode(stack, options); err != nil {
-		return err
-	}
-	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opDescribeEventBus(options.Region), middleware.Before); err != nil {
-		return err
-	}
-	if err = addRecursionDetection(stack); err != nil {
+	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -168,13 +132,8 @@ func (c *Client) addOperationDescribeEventBusMiddlewares(stack *middleware.Stack
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
-	return nil
-}
-
-func newServiceMetadataMiddleware_opDescribeEventBus(region string) *awsmiddleware.RegisterServiceMetadata {
-	return &awsmiddleware.RegisterServiceMetadata{
-		Region:        region,
-		ServiceID:     ServiceID,
-		OperationName: "DescribeEventBus",
+	if err = addInterceptors(stack, options); err != nil {
+		return err
 	}
+	return nil
 }

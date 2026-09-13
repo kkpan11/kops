@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"io"
 
-	"k8s.io/kops/pkg/assets"
+	"k8s.io/kops/pkg/assets/assetcopy"
 	"k8s.io/kops/pkg/commands/commandutils"
 	"k8s.io/kops/pkg/pretty"
 	"k8s.io/kubectl/pkg/util/i18n"
@@ -102,9 +102,11 @@ func NewCmdGetAssets(f *util.Factory, out io.Writer, getOptions *GetOptions) *co
 
 func RunGetAssets(ctx context.Context, f *util.Factory, out io.Writer, options *GetAssetsOptions) error {
 	updateClusterResults, err := RunUpdateCluster(ctx, f, out, &UpdateClusterOptions{
-		Target:      cloudup.TargetDryRun,
-		GetAssets:   true,
-		ClusterName: options.ClusterName,
+		CoreUpdateClusterOptions: CoreUpdateClusterOptions{
+			Target:      cloudup.TargetDryRun,
+			GetAssets:   true,
+			ClusterName: options.ClusterName,
+		},
 	})
 	if err != nil {
 		return err
@@ -141,7 +143,7 @@ func RunGetAssets(ctx context.Context, f *util.Factory, out io.Writer, options *
 	}
 
 	if options.Copy {
-		err := assets.Copy(updateClusterResults.ImageAssets, updateClusterResults.FileAssets, f.VFSContext(), updateClusterResults.Cluster)
+		err := assetcopy.Copy(updateClusterResults.ImageAssets, updateClusterResults.FileAssets, f.VFSContext(), updateClusterResults.Cluster)
 		if err != nil {
 			return err
 		}

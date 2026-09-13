@@ -4,11 +4,8 @@ package ssm
 
 import (
 	"context"
-	"fmt"
-	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/service/ssm/types"
 	"github.com/aws/smithy-go/middleware"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
 // A State Manager association defines the state that you want to maintain on your
@@ -17,11 +14,11 @@ import (
 // be closed. For static targets, the association specifies a schedule for when the
 // configuration is reapplied. For dynamic targets, such as an Amazon Web Services
 // resource group or an Amazon Web Services autoscaling group, State Manager, a
-// capability of Amazon Web Services Systems Manager applies the configuration when
-// new managed nodes are added to the group. The association also specifies actions
-// to take when applying the configuration. For example, an association for
-// anti-virus software might run once a day. If the software isn't installed, then
-// State Manager installs it. If the software is installed, but the service isn't
+// tool in Amazon Web Services Systems Manager applies the configuration when new
+// managed nodes are added to the group. The association also specifies actions to
+// take when applying the configuration. For example, an association for anti-virus
+// software might run once a day. If the software isn't installed, then State
+// Manager installs it. If the software is installed, but the service isn't
 // running, then the association might instruct State Manager to start the service.
 func (c *Client) CreateAssociation(ctx context.Context, params *CreateAssociationInput, optFns ...func(*Options)) (*CreateAssociationOutput, error) {
 	if params == nil {
@@ -69,23 +66,47 @@ type CreateAssociationInput struct {
 	AlarmConfiguration *types.AlarmConfiguration
 
 	// By default, when you create a new association, the system runs it immediately
-	// after it is created and then according to the schedule you specified. Specify
-	// this option if you don't want an association to run immediately after you create
-	// it. This parameter isn't supported for rate expressions.
+	// after it is created and then according to the schedule you specified and when
+	// target changes are detected. Specify true for ApplyOnlyAtCronInterval if you
+	// want the association to run only according to the schedule you specified.
+	//
+	// For more information, see [Understanding when associations are applied to resources] and [>About target updates with Automation runbooks] in the Amazon Web Services Systems Manager User
+	// Guide.
+	//
+	// This parameter isn't supported for rate expressions.
+	//
+	// [Understanding when associations are applied to resources]: https://docs.aws.amazon.com/systems-manager/latest/userguide/state-manager-about.html#state-manager-about-scheduling
+	// [>About target updates with Automation runbooks]: https://docs.aws.amazon.com/systems-manager/latest/userguide/state-manager-about.html#runbook-target-updates
 	ApplyOnlyAtCronInterval bool
+
+	// A role used by association to take actions on your behalf. State Manager will
+	// assume this role and call required APIs when dispatching configurations to
+	// nodes. If not specified, [service-linked role for Systems Manager]will be used by default.
+	//
+	// It is recommended that you define a custom IAM role so that you have full
+	// control of the permissions that State Manager has when taking actions on your
+	// behalf.
+	//
+	// Service-linked role support in State Manager is being phased out. Associations
+	// relying on service-linked role may require updates in the future to continue
+	// functioning properly.
+	//
+	// [service-linked role for Systems Manager]: https://docs.aws.amazon.com/systems-manager/latest/userguide/using-service-linked-roles.html
+	AssociationDispatchAssumeRole *string
 
 	// Specify a descriptive name for the association.
 	AssociationName *string
 
 	// Choose the parameter that will define how your automation will branch out. This
 	// target is required for associations that use an Automation runbook and target
-	// resources by using rate controls. Automation is a capability of Amazon Web
-	// Services Systems Manager.
+	// resources by using rate controls. Automation is a tool in Amazon Web Services
+	// Systems Manager.
 	AutomationTargetParameterName *string
 
-	// The names or Amazon Resource Names (ARNs) of the Change Calendar type documents
+	// The names of Amazon Resource Names (ARNs) of the Change Calendar type documents
 	// you want to gate your associations under. The associations only run when that
-	// change calendar is open. For more information, see [Amazon Web Services Systems Manager Change Calendar].
+	// change calendar is open. For more information, see [Amazon Web Services Systems Manager Change Calendar]in the Amazon Web Services
+	// Systems Manager User Guide.
 	//
 	// [Amazon Web Services Systems Manager Change Calendar]: https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-change-calendar
 	CalendarNames []string
@@ -205,6 +226,9 @@ type CreateAssociationInput struct {
 	// A location is a combination of Amazon Web Services Regions and Amazon Web
 	// Services accounts where you want to run the association. Use this action to
 	// create an association in multiple Regions and multiple accounts.
+	//
+	// The TargetLocationAlarmConfiguration parameter is not supported by State
+	// Manager.
 	TargetLocations []types.TargetLocation
 
 	// A key-value mapping of document parameters to target resources. Both Targets
@@ -215,10 +239,10 @@ type CreateAssociationInput struct {
 	// Amazon Web Services resource groups, all managed nodes in an Amazon Web Services
 	// account, or individual managed node IDs. You can target all managed nodes in an
 	// Amazon Web Services account by specifying the InstanceIds key with a value of *
-	// . For more information about choosing targets for an association, see [About targets and rate controls in State Manager associations]in the
+	// . For more information about choosing targets for an association, see [Understanding targets and rate controls in State Manager associations]in the
 	// Amazon Web Services Systems Manager User Guide.
 	//
-	// [About targets and rate controls in State Manager associations]: https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-state-manager-targets-and-rate-controls.html
+	// [Understanding targets and rate controls in State Manager associations]: https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-state-manager-targets-and-rate-controls.html
 	Targets []types.Target
 
 	noSmithyDocumentSerde
@@ -236,9 +260,6 @@ type CreateAssociationOutput struct {
 }
 
 func (c *Client) addOperationCreateAssociationMiddlewares(stack *middleware.Stack, options Options) (err error) {
-	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
-		return err
-	}
 	err = stack.Serialize.Add(&awsAwsjson11_serializeOpCreateAssociation{}, middleware.After)
 	if err != nil {
 		return err
@@ -247,19 +268,7 @@ func (c *Client) addOperationCreateAssociationMiddlewares(stack *middleware.Stac
 	if err != nil {
 		return err
 	}
-	if err := addProtocolFinalizerMiddlewares(stack, options, "CreateAssociation"); err != nil {
-		return fmt.Errorf("add protocol finalizers: %v", err)
-	}
 
-	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
-		return err
-	}
-	if err = addSetLoggerMiddleware(stack, options); err != nil {
-		return err
-	}
-	if err = addClientRequestID(stack); err != nil {
-		return err
-	}
 	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
@@ -269,40 +278,13 @@ func (c *Client) addOperationCreateAssociationMiddlewares(stack *middleware.Stac
 	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetry(stack, options); err != nil {
+	if err = addRecordResponseTiming(stack, options); err != nil {
 		return err
 	}
-	if err = addRawResponseToMetadata(stack); err != nil {
-		return err
-	}
-	if err = addRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack, options); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addTimeOffsetBuild(stack, c); err != nil {
-		return err
-	}
-	if err = addUserAgentRetryMode(stack, options); err != nil {
+	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
 	if err = addOpCreateAssociationValidationMiddleware(stack); err != nil {
-		return err
-	}
-	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opCreateAssociation(options.Region), middleware.Before); err != nil {
-		return err
-	}
-	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -317,13 +299,8 @@ func (c *Client) addOperationCreateAssociationMiddlewares(stack *middleware.Stac
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
-	return nil
-}
-
-func newServiceMetadataMiddleware_opCreateAssociation(region string) *awsmiddleware.RegisterServiceMetadata {
-	return &awsmiddleware.RegisterServiceMetadata{
-		Region:        region,
-		ServiceID:     ServiceID,
-		OperationName: "CreateAssociation",
+	if err = addInterceptors(stack, options); err != nil {
+		return err
 	}
+	return nil
 }

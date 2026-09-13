@@ -25,10 +25,10 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/kops/pkg/systemd"
 	"k8s.io/kops/upup/pkg/fi"
-	"k8s.io/kops/upup/pkg/fi/cloudup/scaleway"
 	"k8s.io/kops/upup/pkg/fi/nodeup/install"
 	"k8s.io/kops/upup/pkg/fi/nodeup/nodetasks"
 	"k8s.io/kops/util/pkg/distributions"
+	"k8s.io/kops/util/pkg/vfs/openstackconfig"
 )
 
 type Installation struct {
@@ -84,10 +84,6 @@ func (i *Installation) buildEnvFile() *nodetasks.InstallFile {
 		envVars["AWS_REGION"] = os.Getenv("AWS_REGION")
 	}
 
-	if os.Getenv("GOSSIP_DNS_CONN_LIMIT") != "" {
-		envVars["GOSSIP_DNS_CONN_LIMIT"] = os.Getenv("GOSSIP_DNS_CONN_LIMIT")
-	}
-
 	// Pass in required credentials when using user-defined s3 endpoint
 	if os.Getenv("S3_ENDPOINT") != "" {
 		envVars["S3_ENDPOINT"] = os.Getenv("S3_ENDPOINT")
@@ -108,35 +104,14 @@ func (i *Installation) buildEnvFile() *nodetasks.InstallFile {
 			"OS_REGION_NAME",
 			"OS_APPLICATION_CREDENTIAL_ID",
 			"OS_APPLICATION_CREDENTIAL_SECRET",
+			openstackconfig.EnvKeyOpenstackTLSInsecureSkipVerify,
 		} {
 			envVars[envVar] = os.Getenv(envVar)
 		}
 	}
 
-	if os.Getenv("DIGITALOCEAN_ACCESS_TOKEN") != "" {
-		envVars["DIGITALOCEAN_ACCESS_TOKEN"] = os.Getenv("DIGITALOCEAN_ACCESS_TOKEN")
-	}
-
-	if os.Getenv("HCLOUD_TOKEN") != "" {
-		envVars["HCLOUD_TOKEN"] = os.Getenv("HCLOUD_TOKEN")
-	}
-
 	if os.Getenv("OSS_REGION") != "" {
 		envVars["OSS_REGION"] = os.Getenv("OSS_REGION")
-	}
-
-	if os.Getenv("AZURE_STORAGE_ACCOUNT") != "" {
-		envVars["AZURE_STORAGE_ACCOUNT"] = os.Getenv("AZURE_STORAGE_ACCOUNT")
-	}
-
-	if os.Getenv("SCW_PROFILE") != "" || os.Getenv("SCW_SECRET_KEY") != "" {
-		profile, err := scaleway.CreateValidScalewayProfile()
-		if err != nil {
-			return nil
-		}
-		envVars["SCW_ACCESS_KEY"] = fi.ValueOf(profile.AccessKey)
-		envVars["SCW_SECRET_KEY"] = fi.ValueOf(profile.SecretKey)
-		envVars["SCW_DEFAULT_PROJECT_ID"] = fi.ValueOf(profile.DefaultProjectID)
 	}
 
 	sysconfig := ""
@@ -148,6 +123,8 @@ func (i *Installation) buildEnvFile() *nodetasks.InstallFile {
 		Path:     "/etc/sysconfig/kops-configuration",
 		Contents: fi.NewStringResource(sysconfig),
 		Type:     nodetasks.FileType_File,
+		// The file may contain state store and OpenStack credentials.
+		Mode: new("0600"),
 	}}
 
 	return task
@@ -174,7 +151,7 @@ func (i *Installation) buildSystemdJob() *nodetasks.InstallService {
 
 	service := &nodetasks.InstallService{Service: nodetasks.Service{
 		Name:       serviceName,
-		Definition: fi.PtrTo(manifestString),
+		Definition: new(manifestString),
 	}}
 
 	service.InitDefaults()

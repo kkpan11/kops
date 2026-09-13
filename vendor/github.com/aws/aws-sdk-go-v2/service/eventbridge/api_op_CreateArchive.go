@@ -4,11 +4,8 @@ package eventbridge
 
 import (
 	"context"
-	"fmt"
-	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/service/eventbridge/types"
 	"github.com/aws/smithy-go/middleware"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
 	"time"
 )
 
@@ -18,24 +15,13 @@ import (
 // pattern to filter events sent to the archive, all events are sent to the archive
 // except replayed events. Replayed events are not sent to an archive.
 //
-// Archives and schema discovery are not supported for event buses encrypted using
-// a customer managed key. EventBridge returns an error if:
+// If you have specified that EventBridge use a customer managed key for
+// encrypting the source event bus, we strongly recommend you also specify a
+// customer managed key for any archives for the event bus as well.
 //
-//   - You call [CreateArchive]on an event bus set to use a customer managed key for encryption.
+// For more information, see [Encrypting archives] in the Amazon EventBridge User Guide.
 //
-//   - You call [CreateDiscoverer]on an event bus set to use a customer managed key for encryption.
-//
-//   - You call [UpdatedEventBus]to set a customer managed key on an event bus with an archives or
-//     schema discovery enabled.
-//
-// To enable archives or schema discovery on an event bus, choose to use an Amazon
-// Web Services owned key. For more information, see [Data encryption in EventBridge]in the Amazon EventBridge
-// User Guide.
-//
-// [UpdatedEventBus]: https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_UpdatedEventBus.html
-// [Data encryption in EventBridge]: https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-encryption.html
-// [CreateArchive]: https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_CreateArchive.html
-// [CreateDiscoverer]: https://docs.aws.amazon.com/eventbridge/latest/schema-reference/v1-discoverers.html#CreateDiscoverer
+// [Encrypting archives]: https://docs.aws.amazon.com/eventbridge/latest/userguide/encryption-archives.html
 func (c *Client) CreateArchive(ctx context.Context, params *CreateArchiveInput, optFns ...func(*Options)) (*CreateArchiveOutput, error) {
 	if params == nil {
 		params = &CreateArchiveInput{}
@@ -69,6 +55,25 @@ type CreateArchiveInput struct {
 	// An event pattern to use to filter events sent to the archive.
 	EventPattern *string
 
+	// The identifier of the KMS customer managed key for EventBridge to use, if you
+	// choose to use a customer managed key to encrypt this archive. The identifier can
+	// be the key Amazon Resource Name (ARN), KeyId, key alias, or key alias ARN.
+	//
+	// If you do not specify a customer managed key identifier, EventBridge uses an
+	// Amazon Web Services owned key to encrypt the archive.
+	//
+	// For more information, see [Identify and view keys] in the Key Management Service Developer Guide.
+	//
+	// If you have specified that EventBridge use a customer managed key for
+	// encrypting the source event bus, we strongly recommend you also specify a
+	// customer managed key for any archives for the event bus as well.
+	//
+	// For more information, see [Encrypting archives] in the Amazon EventBridge User Guide.
+	//
+	// [Identify and view keys]: https://docs.aws.amazon.com/kms/latest/developerguide/viewing-keys.html
+	// [Encrypting archives]: https://docs.aws.amazon.com/eventbridge/latest/userguide/encryption-archives.html
+	KmsKeyIdentifier *string
+
 	// The number of days to retain events for. Default value is 0. If set to 0,
 	// events are retained indefinitely
 	RetentionDays *int32
@@ -97,9 +102,6 @@ type CreateArchiveOutput struct {
 }
 
 func (c *Client) addOperationCreateArchiveMiddlewares(stack *middleware.Stack, options Options) (err error) {
-	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
-		return err
-	}
 	err = stack.Serialize.Add(&awsAwsjson11_serializeOpCreateArchive{}, middleware.After)
 	if err != nil {
 		return err
@@ -108,19 +110,7 @@ func (c *Client) addOperationCreateArchiveMiddlewares(stack *middleware.Stack, o
 	if err != nil {
 		return err
 	}
-	if err := addProtocolFinalizerMiddlewares(stack, options, "CreateArchive"); err != nil {
-		return fmt.Errorf("add protocol finalizers: %v", err)
-	}
 
-	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
-		return err
-	}
-	if err = addSetLoggerMiddleware(stack, options); err != nil {
-		return err
-	}
-	if err = addClientRequestID(stack); err != nil {
-		return err
-	}
 	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
@@ -130,40 +120,13 @@ func (c *Client) addOperationCreateArchiveMiddlewares(stack *middleware.Stack, o
 	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetry(stack, options); err != nil {
+	if err = addRecordResponseTiming(stack, options); err != nil {
 		return err
 	}
-	if err = addRawResponseToMetadata(stack); err != nil {
-		return err
-	}
-	if err = addRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack, options); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addTimeOffsetBuild(stack, c); err != nil {
-		return err
-	}
-	if err = addUserAgentRetryMode(stack, options); err != nil {
+	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
 	if err = addOpCreateArchiveValidationMiddleware(stack); err != nil {
-		return err
-	}
-	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opCreateArchive(options.Region), middleware.Before); err != nil {
-		return err
-	}
-	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -178,13 +141,8 @@ func (c *Client) addOperationCreateArchiveMiddlewares(stack *middleware.Stack, o
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
-	return nil
-}
-
-func newServiceMetadataMiddleware_opCreateArchive(region string) *awsmiddleware.RegisterServiceMetadata {
-	return &awsmiddleware.RegisterServiceMetadata{
-		Region:        region,
-		ServiceID:     ServiceID,
-		OperationName: "CreateArchive",
+	if err = addInterceptors(stack, options); err != nil {
+		return err
 	}
+	return nil
 }

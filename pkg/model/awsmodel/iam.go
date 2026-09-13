@@ -17,13 +17,10 @@ limitations under the License.
 package awsmodel
 
 import (
-	"context"
 	"fmt"
 	"sort"
 	"strings"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	awsiam "github.com/aws/aws-sdk-go-v2/service/iam"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
@@ -65,7 +62,7 @@ func (b *IAMModelBuilder) Build(c *fi.CloudupModelBuilderContext) error {
 
 	// Collect Instance Profile ARNs and their associated Instance Group roles
 	sharedProfileARNsToIGRole := make(map[string]kops.InstanceGroupRole)
-	for _, ig := range b.InstanceGroups {
+	for _, ig := range b.AllInstanceGroups {
 		if ig.Spec.IAM != nil && ig.Spec.IAM.Profile != nil {
 			specProfile := fi.ValueOf(ig.Spec.IAM.Profile)
 			if matchingRole, ok := sharedProfileARNsToIGRole[specProfile]; ok {
@@ -158,7 +155,7 @@ func (b *IAMModelBuilder) Build(c *fi.CloudupModelBuilderContext) error {
 				name := "external-" + fi.ValueOf(iamRole.Name)
 				externalPolicies := aws.PolicyARNs
 				c.AddTask(&awstasks.IAMRolePolicy{
-					Name:             fi.PtrTo(name),
+					Name:             new(name),
 					ExternalPolicies: &externalPolicies,
 					Managed:          true,
 					Role:             iamRole,
@@ -199,7 +196,7 @@ func (b *IAMModelBuilder) buildIAMRole(role iam.Subject, iamName string, c *fi.C
 	}
 
 	iamRole := &awstasks.IAMRole{
-		Name:      fi.PtrTo(iamName),
+		Name:      new(iamName),
 		Lifecycle: b.Lifecycle,
 
 		RolePolicyDocument: rolePolicy,
@@ -207,14 +204,14 @@ func (b *IAMModelBuilder) buildIAMRole(role iam.Subject, iamName string, c *fi.C
 
 	if isServiceAccount {
 		// e.g. kube-system-dns-controller
-		iamRole.ExportWithID = fi.PtrTo(roleKey)
+		iamRole.ExportWithID = new(roleKey)
 		sa, ok := role.ServiceAccount()
 		if ok {
 			iamRole.Tags = b.CloudTagsForServiceAccount(iamName, sa)
 		}
 	} else {
 		// e.g. nodes
-		iamRole.ExportWithID = fi.PtrTo(roleKey + "s")
+		iamRole.ExportWithID = new(roleKey + "s")
 		iamRole.Tags = b.CloudTags(iamName, false)
 	}
 
@@ -231,6 +228,7 @@ func (b *IAMModelBuilder) buildIAMRolePolicy(role iam.Subject, iamName string, i
 	iamPolicy := &iam.PolicyResource{
 		Builder: &iam.PolicyBuilder{
 			Cluster:                               b.Cluster,
+			AllInstanceGroups:                     b.AllInstanceGroups,
 			Role:                                  role,
 			Region:                                b.Region,
 			Partition:                             b.AWSPartition,
@@ -243,12 +241,12 @@ func (b *IAMModelBuilder) buildIAMRolePolicy(role iam.Subject, iamName string, i
 		// but we might be creating the hosted zone dynamically.
 		// We create a stub-reference which will be combined by the execution engine.
 		iamPolicy.DNSZone = &awstasks.DNSZone{
-			Name: fi.PtrTo(b.NameForDNSZone()),
+			Name: new(b.NameForDNSZone()),
 		}
 	}
 
 	t := &awstasks.IAMRolePolicy{
-		Name:      fi.PtrTo(iamName),
+		Name:      new(iamName),
 		Lifecycle: b.Lifecycle,
 
 		Role:           iamRole,
@@ -292,9 +290,9 @@ func (b *IAMModelBuilder) buildIAMTasks(role iam.Subject, iamName string, c *fi.
 		var iamInstanceProfile *awstasks.IAMInstanceProfile
 		{
 			iamInstanceProfile = &awstasks.IAMInstanceProfile{
-				Name:      fi.PtrTo(iamName),
+				Name:      new(iamName),
 				Lifecycle: b.Lifecycle,
-				Shared:    fi.PtrTo(shared),
+				Shared:    new(shared),
 				Tags:      b.CloudTags(iamName, shared),
 			}
 			c.AddTask(iamInstanceProfile)
@@ -314,7 +312,7 @@ func (b *IAMModelBuilder) buildIAMTasks(role iam.Subject, iamName string, c *fi.
 				}
 				{
 					iamInstanceProfileRole := &awstasks.IAMInstanceProfileRole{
-						Name:      fi.PtrTo(iamName),
+						Name:      new(iamName),
 						Lifecycle: b.Lifecycle,
 
 						InstanceProfile: iamInstanceProfile,
@@ -336,7 +334,7 @@ func (b *IAMModelBuilder) buildIAMTasks(role iam.Subject, iamName string, c *fi.
 
 				name := fmt.Sprintf("%s-policyoverride", roleKey)
 				t := &awstasks.IAMRolePolicy{
-					Name:             fi.PtrTo(name),
+					Name:             new(name),
 					Lifecycle:        b.Lifecycle,
 					Role:             iamRole,
 					Managed:          true,
@@ -360,7 +358,7 @@ func (b *IAMModelBuilder) buildIAMTasks(role iam.Subject, iamName string, c *fi.
 				additionalPolicyName := "additional." + iamName
 
 				t := &awstasks.IAMRolePolicy{
-					Name:      fi.PtrTo(additionalPolicyName),
+					Name:      new(additionalPolicyName),
 					Lifecycle: b.Lifecycle,
 
 					Role: iamRole,
@@ -402,25 +400,6 @@ func (b *IAMModelBuilder) buildPolicy(policyString string) (*iam.Policy, error) 
 
 	p.Statement = append(p.Statement, statements...)
 	return p, nil
-}
-
-// IAMServiceEC2 returns the name of the IAM service for EC2 in the current region.
-// It is ec2.amazonaws.com in the default aws partition, but different in other isolated/custom partitions
-func IAMServiceEC2(region string) (string, error) {
-	ctx := context.TODO()
-	resolver := ec2.NewDefaultEndpointResolverV2()
-	ep, err := resolver.ResolveEndpoint(ctx, ec2.EndpointParameters{Region: aws.String(region)})
-	if err != nil {
-		return "", fmt.Errorf("failed to resolve endpoint: %v", err)
-	}
-	if ep.URI.Host != "" {
-		// Remove the region from the hostname. Examples:
-		// ec2.us-east-1.amazonaws.com     -> ec2.amazonaws.com
-		// ec2.cn-west-1.amazonaws.com.cn  -> ec2.amazonaws.com.cn
-		// ec2.us-gov-west-1.amazonaws.com -> ec2.amazonaws.com
-		return strings.ReplaceAll(ep.URI.Host, fmt.Sprintf("%v.", region), ""), nil
-	}
-	return "ec2.amazonaws.com", nil
 }
 
 func formatAWSIAMStatement(accountId, partition, oidcProvider, namespace, name string) (*iam.Statement, error) {
@@ -474,7 +453,7 @@ func (b *IAMModelBuilder) buildAWSIAMRolePolicy(role iam.Subject) (fi.Resource, 
 	} else {
 		// We don't generate using json.Marshal here, it would create whitespace changes in the policy for existing clusters.
 
-		ec2Service, err := IAMServiceEC2(b.Region)
+		ec2Service, err := iam.IAMServiceEC2(b.Region)
 		if err != nil {
 			return nil, err
 		}

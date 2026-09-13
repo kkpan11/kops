@@ -18,6 +18,7 @@ package cloudup
 
 import (
 	"context"
+	"io"
 	"os"
 	"path"
 	"testing"
@@ -35,7 +36,6 @@ import (
 	"k8s.io/kops/upup/models"
 	"k8s.io/kops/upup/pkg/fi"
 	"k8s.io/kops/upup/pkg/fi/cloudup/bootstrapchannelbuilder"
-	"k8s.io/kops/upup/pkg/fi/fitasks"
 	"k8s.io/kops/util/pkg/vfs"
 )
 
@@ -46,6 +46,8 @@ func TestBootstrapChannelBuilder_BuildTasks(t *testing.T) {
 	h.SetupMockAWS()
 
 	runChannelBuilderTest(t, "simple", []string{"kops-controller.addons.k8s.io-k8s-1.16"})
+	// Clusters with dns=none get an empty dns-controller manifest, so leftover resources are pruned
+	runChannelBuilderTest(t, "dns-none", []string{"dns-controller.addons.k8s.io-k8s-1.12"})
 	// Use cilium networking, proxy
 	runChannelBuilderTest(t, "cilium", []string{"kops-controller.addons.k8s.io-k8s-1.16"})
 	runChannelBuilderTest(t, "amazonvpc", []string{"networking.amazon-vpc-routed-eni-k8s-1.16"})
@@ -111,7 +113,7 @@ func runChannelBuilderTest(t *testing.T, key string, addonManifests []string) {
 	}
 	cluster = fullSpec
 
-	templates, err := templates.LoadTemplates(ctx, cluster, models.NewAssetPath("cloudup/resources"))
+	templates, err := templates.LoadTemplates(ctx, models.NewAssetPath("cloudup/resources"))
 	if err != nil {
 		t.Fatalf("error building templates for %q: %v", key, err)
 	}
@@ -153,18 +155,21 @@ func runChannelBuilderTest(t *testing.T, key string, addonManifests []string) {
 		},
 	}
 
-	tf := &TemplateFunctions{
-		KopsModelContext: kopsModel,
-		cloud:            cloud,
+	kopsModel.AllInstanceGroups = kopsModel.InstanceGroups
+
+	addonRenderer := &addonTemplateRenderer{
+		modelContext: &kopsModel,
+		cloud:        cloud,
+		secretStore:  secretStore,
 	}
-	tf.AddTo(templates.TemplateFunctions, secretStore)
 
 	bcb := bootstrapchannelbuilder.NewBootstrapChannelBuilder(
 		&kopsModel,
 		fi.LifecycleSync,
-		assets.NewAssetBuilder(vfs.Context, cluster.Spec.Assets, cluster.Spec.KubernetesVersion, false),
+		assets.NewAssetBuilder(vfs.Context, cluster.Spec.Assets, false),
 		templates,
 		nil,
+		addonRenderer,
 	)
 
 	context := &fi.CloudupModelBuilderContext{
@@ -174,16 +179,44 @@ func runChannelBuilderTest(t *testing.T, key string, addonManifests []string) {
 	if err != nil {
 		t.Fatalf("error from BootstrapChannelBuilder Build: %v", err)
 	}
+	if context.Tasks["ManagedFile/"+cluster.ObjectMeta.Name+"-addons-bootstrap"] != nil {
+		t.Fatalf("bootstrap addon manifest should be created as an BootstrapChannel task")
+	}
+	if context.Tasks["BootstrapChannel/"+cluster.ObjectMeta.Name+"-addons-bootstrap"] == nil {
+		t.Fatalf("bootstrap addons channel task not found")
+	}
+
+	target := fi.NewCloudupDryRunTarget(assets.NewAssetBuilder(vfs.Context, cluster.Spec.Assets, false), false, io.Discard)
+	cloudupContext, err := fi.NewCloudupContext(ctx, fi.DeletionProcessingModeDeleteIncludingDeferred, target, cluster, cloud, nil, secretStore, basePath, context.Tasks)
+	if err != nil {
+		t.Fatalf("error building cloudup context: %v", err)
+	}
 
 	{
 		name := cluster.ObjectMeta.Name + "-addons-bootstrap"
-		manifestTask := context.Tasks["ManagedFile/"+name]
+		manifestTask := context.Tasks["BootstrapChannel/"+name]
 		if manifestTask == nil {
 			t.Fatalf("manifest task not found (%q)", name)
 		}
 
-		manifestFileTask := manifestTask.(*fitasks.ManagedFile)
-		actualManifest, err := fi.ResourceAsString(manifestFileTask.Contents)
+		bootstrapChannelTask, ok := manifestTask.(*bootstrapchannelbuilder.BootstrapChannel)
+		if !ok {
+			t.Fatalf("expected BootstrapChannel task, got %T", manifestTask)
+		}
+		for _, dependency := range bootstrapChannelTask.GetDependencies(context.Tasks) {
+			addonManifestTask, ok := dependency.(*bootstrapchannelbuilder.AddonManifest)
+			if !ok {
+				t.Fatalf("expected AddonManifest dependency, got %T", dependency)
+			}
+			if err := addonManifestTask.Normalize(cloudupContext); err != nil {
+				t.Fatalf("error normalizing addon manifest %q: %v", fi.ValueOf(addonManifestTask.Name), err)
+			}
+		}
+		if err := bootstrapChannelTask.Normalize(cloudupContext); err != nil {
+			t.Fatalf("error normalizing addons channel: %v", err)
+		}
+
+		actualManifest, err := fi.ResourceAsString(bootstrapChannelTask.Contents)
 		if err != nil {
 			t.Fatalf("error getting manifest as string: %v", err)
 		}
@@ -194,7 +227,7 @@ func runChannelBuilderTest(t *testing.T, key string, addonManifests []string) {
 
 	for _, k := range addonManifests {
 		name := cluster.ObjectMeta.Name + "-addons-" + k
-		manifestTask := context.Tasks["ManagedFile/"+name]
+		manifestTask := context.Tasks["AddonManifest/"+name]
 		if manifestTask == nil {
 			for k := range context.Tasks {
 				t.Logf("found task %s", k)
@@ -202,8 +235,12 @@ func runChannelBuilderTest(t *testing.T, key string, addonManifests []string) {
 			t.Fatalf("manifest task not found (%q)", name)
 		}
 
-		manifestFileTask := manifestTask.(*fitasks.ManagedFile)
-		actualManifest, err := fi.ResourceAsString(manifestFileTask.Contents)
+		addonManifestTask, ok := manifestTask.(*bootstrapchannelbuilder.AddonManifest)
+		if !ok {
+			t.Fatalf("expected AddonManifest task, got %T", manifestTask)
+		}
+
+		actualManifest, err := fi.ResourceAsString(addonManifestTask.Contents)
 		if err != nil {
 			t.Fatalf("error getting manifest as string: %v", err)
 		}

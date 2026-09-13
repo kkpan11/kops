@@ -17,10 +17,11 @@ limitations under the License.
 package openstacktasks
 
 import (
+	"context"
 	"fmt"
 	"sort"
 
-	"github.com/gophercloud/gophercloud/openstack/loadbalancer/v2/listeners"
+	"github.com/gophercloud/gophercloud/v2/openstack/loadbalancer/v2/listeners"
 	"k8s.io/klog/v2"
 	"k8s.io/kops/upup/pkg/fi"
 	"k8s.io/kops/upup/pkg/fi/cloudup/openstack"
@@ -50,7 +51,7 @@ func (e *LBListener) GetDependencies(tasks map[string]fi.CloudupTask) []fi.Cloud
 	return deps
 }
 
-var _ fi.CompareWithID = &LBListener{}
+var _ fi.CompareWithID = (*LBListener)(nil)
 
 func (s *LBListener) CompareWithID() *string {
 	return s.ID
@@ -60,9 +61,9 @@ func NewLBListenerTaskFromCloud(cloud openstack.OpenstackCloud, lifecycle fi.Lif
 	// sort for consistent comparison
 	sort.Strings(listener.AllowedCIDRs)
 	listenerTask := &LBListener{
-		ID:           fi.PtrTo(listener.ID),
-		Name:         fi.PtrTo(listener.Name),
-		Port:         fi.PtrTo(listener.ProtocolPort),
+		ID:           new(listener.ID),
+		Name:         new(listener.Name),
+		Port:         new(listener.ProtocolPort),
 		AllowedCIDRs: listener.AllowedCIDRs,
 		Lifecycle:    lifecycle,
 	}
@@ -165,14 +166,14 @@ func (_ *LBListener) RenderOpenstack(t *openstack.OpenstackAPITarget, a, e, chan
 		if err != nil {
 			return fmt.Errorf("error creating LB listener: %v", err)
 		}
-		e.ID = fi.PtrTo(listener.ID)
+		e.ID = new(listener.ID)
 		return nil
 	} else if len(changes.AllowedCIDRs) > 0 {
 		if useVIPACL && (fi.ValueOf(a.Pool.Loadbalancer.Provider) != "ovn") {
 			opts := listeners.UpdateOpts{
 				AllowedCIDRs: &changes.AllowedCIDRs,
 			}
-			_, err := listeners.Update(t.Cloud.LoadBalancerClient(), fi.ValueOf(a.ID), opts).Extract()
+			_, err := listeners.Update(context.TODO(), t.Cloud.LoadBalancerClient(), fi.ValueOf(a.ID), opts).Extract()
 			if err != nil {
 				return fmt.Errorf("error updating LB listener: %v", err)
 			}

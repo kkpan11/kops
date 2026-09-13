@@ -26,9 +26,9 @@ import (
 	"strings"
 
 	"github.com/go-viper/mapstructure/v2"
-	"github.com/gophercloud/gophercloud"
-	gos "github.com/gophercloud/gophercloud/openstack"
-	"github.com/gophercloud/gophercloud/openstack/compute/v2/servers"
+	"github.com/gophercloud/gophercloud/v2"
+	gos "github.com/gophercloud/gophercloud/v2/openstack"
+	"github.com/gophercloud/gophercloud/v2/openstack/compute/v2/servers"
 	"k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -37,6 +37,7 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/kops/pkg/bootstrap"
 	"k8s.io/kops/pkg/wellknownports"
+	"k8s.io/kops/upup/pkg/fi/cloudup/openstack/openstackmetadata"
 )
 
 type OpenStackVerifierOptions struct {
@@ -47,7 +48,7 @@ type openstackVerifier struct {
 	kubeClient *kubernetes.Clientset
 }
 
-var _ bootstrap.Verifier = &openstackVerifier{}
+var _ bootstrap.Verifier = (*openstackVerifier)(nil)
 
 func NewOpenstackVerifier(opt *OpenStackVerifierOptions) (bootstrap.Verifier, error) {
 	env, err := gos.AuthOptionsFromEnv()
@@ -72,7 +73,7 @@ func NewOpenstackVerifier(opt *OpenStackVerifierOptions) (bootstrap.Verifier, er
 	// node-controller should be able to renew it tokens against OpenStack API
 	env.AllowReauth = true
 
-	err = gos.Authenticate(provider, env)
+	err = gos.Authenticate(context.TODO(), provider, env)
 	if err != nil {
 		return nil, err
 	}
@@ -121,12 +122,12 @@ func readKubeConfig() (*restclient.Config, error) {
 }
 
 func (o openstackVerifier) VerifyToken(ctx context.Context, rawRequest *http.Request, token string, body []byte) (*bootstrap.VerifyResult, error) {
-	if !strings.HasPrefix(token, OpenstackAuthenticationTokenPrefix) {
+	if !strings.HasPrefix(token, openstackmetadata.OpenstackAuthenticationTokenPrefix) {
 		return nil, bootstrap.ErrNotThisVerifier
 	}
-	serverID := strings.TrimPrefix(token, OpenstackAuthenticationTokenPrefix)
+	serverID := strings.TrimPrefix(token, openstackmetadata.OpenstackAuthenticationTokenPrefix)
 
-	instance, err := servers.Get(o.novaClient, serverID).Extract()
+	instance, err := servers.Get(ctx, o.novaClient, serverID).Extract()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get info for server %q: %w", token, err)
 	}

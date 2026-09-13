@@ -181,6 +181,14 @@ func (a *App) GetUpdatedAt() time.Time {
 	return a.UpdatedAt
 }
 
+// GetVPC returns the VPC field.
+func (a *App) GetVPC() *AppVPC {
+	if a == nil {
+		return nil
+	}
+	return a.VPC
+}
+
 // GetComponentName returns the ComponentName field.
 func (a *AppAlert) GetComponentName() string {
 	if a == nil {
@@ -397,12 +405,44 @@ func (a *AppAutoscalingSpecMetricCPU) GetPercent() int64 {
 	return a.Percent
 }
 
+// GetP95Milliseconds returns the P95Milliseconds field.
+func (a *AppAutoscalingSpecMetricRequestDuration) GetP95Milliseconds() int64 {
+	if a == nil {
+		return 0
+	}
+	return a.P95Milliseconds
+}
+
+// GetPerInstance returns the PerInstance field.
+func (a *AppAutoscalingSpecMetricRequestsPerSecond) GetPerInstance() int64 {
+	if a == nil {
+		return 0
+	}
+	return a.PerInstance
+}
+
 // GetCPU returns the CPU field.
 func (a *AppAutoscalingSpecMetrics) GetCPU() *AppAutoscalingSpecMetricCPU {
 	if a == nil {
 		return nil
 	}
 	return a.CPU
+}
+
+// GetRequestDuration returns the RequestDuration field.
+func (a *AppAutoscalingSpecMetrics) GetRequestDuration() *AppAutoscalingSpecMetricRequestDuration {
+	if a == nil {
+		return nil
+	}
+	return a.RequestDuration
+}
+
+// GetRequestsPerSecond returns the RequestsPerSecond field.
+func (a *AppAutoscalingSpecMetrics) GetRequestsPerSecond() *AppAutoscalingSpecMetricRequestsPerSecond {
+	if a == nil {
+		return nil
+	}
+	return a.RequestsPerSecond
 }
 
 // GetCNBVersioning returns the CNBVersioning field.
@@ -805,6 +845,14 @@ func (a *AppFunctionsSpec) GetAlerts() []*AppAlertSpec {
 	return a.Alerts
 }
 
+// GetBitbucket returns the Bitbucket field.
+func (a *AppFunctionsSpec) GetBitbucket() *BitbucketSourceSpec {
+	if a == nil {
+		return nil
+	}
+	return a.Bitbucket
+}
+
 // GetCORS returns the CORS field.
 func (a *AppFunctionsSpec) GetCORS() *AppCORSPolicy {
 	if a == nil {
@@ -877,6 +925,22 @@ func (a *AppFunctionsSpec) GetSourceDir() string {
 	return a.SourceDir
 }
 
+// GetComponents returns the Components field.
+func (a *AppHealth) GetComponents() []*ComponentHealth {
+	if a == nil {
+		return nil
+	}
+	return a.Components
+}
+
+// GetFunctionsComponents returns the FunctionsComponents field.
+func (a *AppHealth) GetFunctionsComponents() []*FunctionsComponentHealth {
+	if a == nil {
+		return nil
+	}
+	return a.FunctionsComponents
+}
+
 // GetLoadBalancer returns the LoadBalancer field.
 func (a *AppIngressSpec) GetLoadBalancer() AppIngressSpecLoadBalancer {
 	if a == nil {
@@ -931,6 +995,14 @@ func (a *AppIngressSpecRule) GetRedirect() *AppIngressSpecRuleRoutingRedirect {
 		return nil
 	}
 	return a.Redirect
+}
+
+// GetAuthority returns the Authority field.
+func (a *AppIngressSpecRuleMatch) GetAuthority() *AppIngressSpecRuleStringMatch {
+	if a == nil {
+		return nil
+	}
+	return a.Authority
 }
 
 // GetPath returns the Path field.
@@ -1005,12 +1077,52 @@ func (a *AppIngressSpecRuleRoutingRedirect) GetUri() string {
 	return a.Uri
 }
 
+// GetExact returns the Exact field.
+func (a *AppIngressSpecRuleStringMatch) GetExact() string {
+	if a == nil || a.Exact == nil {
+		return ""
+	}
+	return *a.Exact
+}
+
 // GetPrefix returns the Prefix field.
 func (a *AppIngressSpecRuleStringMatch) GetPrefix() string {
+	if a == nil || a.Prefix == nil {
+		return ""
+	}
+	return *a.Prefix
+}
+
+// GetComponentName returns the ComponentName field.
+func (a *AppInstance) GetComponentName() string {
 	if a == nil {
 		return ""
 	}
-	return a.Prefix
+	return a.ComponentName
+}
+
+// GetComponentType returns the ComponentType field.
+func (a *AppInstance) GetComponentType() AppInstanceComponentType {
+	if a == nil {
+		return ""
+	}
+	return a.ComponentType
+}
+
+// GetInstanceAlias returns the InstanceAlias field.
+func (a *AppInstance) GetInstanceAlias() string {
+	if a == nil {
+		return ""
+	}
+	return a.InstanceAlias
+}
+
+// GetInstanceName returns the InstanceName field.
+func (a *AppInstance) GetInstanceName() string {
+	if a == nil {
+		return ""
+	}
+	return a.InstanceName
 }
 
 // GetBandwidthAllowanceGib returns the BandwidthAllowanceGib field.
@@ -1141,6 +1253,14 @@ func (a *AppJobSpec) GetAlerts() []*AppAlertSpec {
 	return a.Alerts
 }
 
+// GetBitbucket returns the Bitbucket field.
+func (a *AppJobSpec) GetBitbucket() *BitbucketSourceSpec {
+	if a == nil {
+		return nil
+	}
+	return a.Bitbucket
+}
+
 // GetBuildCommand returns the BuildCommand field.
 func (a *AppJobSpec) GetBuildCommand() string {
 	if a == nil {
@@ -1253,6 +1373,14 @@ func (a *AppJobSpec) GetRunCommand() string {
 	return a.RunCommand
 }
 
+// GetSchedule returns the Schedule field.
+func (a *AppJobSpec) GetSchedule() *AppJobSpecSchedule {
+	if a == nil {
+		return nil
+	}
+	return a.Schedule
+}
+
 // GetSourceDir returns the SourceDir field.
 func (a *AppJobSpec) GetSourceDir() string {
 	if a == nil {
@@ -1267,6 +1395,30 @@ func (a *AppJobSpec) GetTermination() *AppJobSpecTermination {
 		return nil
 	}
 	return a.Termination
+}
+
+// GetTimeout returns the Timeout field.
+func (a *AppJobSpec) GetTimeout() string {
+	if a == nil {
+		return ""
+	}
+	return a.Timeout
+}
+
+// GetCron returns the Cron field.
+func (a *AppJobSpecSchedule) GetCron() string {
+	if a == nil {
+		return ""
+	}
+	return a.Cron
+}
+
+// GetTimeZone returns the TimeZone field.
+func (a *AppJobSpecSchedule) GetTimeZone() string {
+	if a == nil {
+		return ""
+	}
+	return a.TimeZone
 }
 
 // GetGracePeriodSeconds returns the GracePeriodSeconds field.
@@ -1419,6 +1571,30 @@ func (a *AppLogDestinationSpecPapertrail) GetEndpoint() string {
 		return ""
 	}
 	return a.Endpoint
+}
+
+// GetArchive returns the Archive field.
+func (a *AppMaintenanceSpec) GetArchive() bool {
+	if a == nil {
+		return false
+	}
+	return a.Archive
+}
+
+// GetEnabled returns the Enabled field.
+func (a *AppMaintenanceSpec) GetEnabled() bool {
+	if a == nil {
+		return false
+	}
+	return a.Enabled
+}
+
+// GetOfflinePageURL returns the OfflinePageURL field.
+func (a *AppMaintenanceSpec) GetOfflinePageURL() string {
+	if a == nil {
+		return ""
+	}
+	return a.OfflinePageURL
 }
 
 // GetAppID returns the AppID field.
@@ -1629,6 +1805,14 @@ func (a *AppServiceSpec) GetAutoscaling() *AppAutoscalingSpec {
 	return a.Autoscaling
 }
 
+// GetBitbucket returns the Bitbucket field.
+func (a *AppServiceSpec) GetBitbucket() *BitbucketSourceSpec {
+	if a == nil {
+		return nil
+	}
+	return a.Bitbucket
+}
+
 // GetBuildCommand returns the BuildCommand field.
 func (a *AppServiceSpec) GetBuildCommand() string {
 	if a == nil {
@@ -1717,6 +1901,14 @@ func (a *AppServiceSpec) GetImage() *ImageSourceSpec {
 	return a.Image
 }
 
+// GetInactivitySleep returns the InactivitySleep field.
+func (a *AppServiceSpec) GetInactivitySleep() *AppServiceSpecInactivitySleep {
+	if a == nil {
+		return nil
+	}
+	return a.InactivitySleep
+}
+
 // GetInstanceCount returns the InstanceCount field.
 func (a *AppServiceSpec) GetInstanceCount() int64 {
 	if a == nil {
@@ -1741,6 +1933,14 @@ func (a *AppServiceSpec) GetInternalPorts() []int64 {
 	return a.InternalPorts
 }
 
+// GetLivenessHealthCheck returns the LivenessHealthCheck field.
+func (a *AppServiceSpec) GetLivenessHealthCheck() *HealthCheckSpec {
+	if a == nil {
+		return nil
+	}
+	return a.LivenessHealthCheck
+}
+
 // GetLogDestinations returns the LogDestinations field.
 func (a *AppServiceSpec) GetLogDestinations() []*AppLogDestinationSpec {
 	if a == nil {
@@ -1755,6 +1955,14 @@ func (a *AppServiceSpec) GetName() string {
 		return ""
 	}
 	return a.Name
+}
+
+// GetProtocol returns the Protocol field.
+func (a *AppServiceSpec) GetProtocol() ServingProtocol {
+	if a == nil {
+		return ""
+	}
+	return a.Protocol
 }
 
 // GetRoutes returns the Routes field.
@@ -1853,6 +2061,22 @@ func (a *AppServiceSpecHealthCheck) GetTimeoutSeconds() int32 {
 	return a.TimeoutSeconds
 }
 
+// GetAfterSeconds returns the AfterSeconds field.
+func (a *AppServiceSpecInactivitySleep) GetAfterSeconds() int32 {
+	if a == nil {
+		return 0
+	}
+	return a.AfterSeconds
+}
+
+// GetLoadingPage returns the LoadingPage field.
+func (a *AppServiceSpecInactivitySleep) GetLoadingPage() *InactivitySleepLoadingPage {
+	if a == nil {
+		return nil
+	}
+	return a.LoadingPage
+}
+
 // GetDrainSeconds returns the DrainSeconds field.
 func (a *AppServiceSpecTermination) GetDrainSeconds() int32 {
 	if a == nil {
@@ -1885,6 +2109,22 @@ func (a *AppSpec) GetDatabases() []*AppDatabaseSpec {
 	return a.Databases
 }
 
+// GetDisableEdgeCache returns the DisableEdgeCache field.
+func (a *AppSpec) GetDisableEdgeCache() bool {
+	if a == nil {
+		return false
+	}
+	return a.DisableEdgeCache
+}
+
+// GetDisableEmailObfuscation returns the DisableEmailObfuscation field.
+func (a *AppSpec) GetDisableEmailObfuscation() bool {
+	if a == nil {
+		return false
+	}
+	return a.DisableEmailObfuscation
+}
+
 // GetDomains returns the Domains field.
 func (a *AppSpec) GetDomains() []*AppDomainSpec {
 	if a == nil {
@@ -1899,6 +2139,14 @@ func (a *AppSpec) GetEgress() *AppEgressSpec {
 		return nil
 	}
 	return a.Egress
+}
+
+// GetEnhancedThreatControlEnabled returns the EnhancedThreatControlEnabled field.
+func (a *AppSpec) GetEnhancedThreatControlEnabled() bool {
+	if a == nil {
+		return false
+	}
+	return a.EnhancedThreatControlEnabled
 }
 
 // GetEnvs returns the Envs field.
@@ -1941,6 +2189,14 @@ func (a *AppSpec) GetJobs() []*AppJobSpec {
 	return a.Jobs
 }
 
+// GetMaintenance returns the Maintenance field.
+func (a *AppSpec) GetMaintenance() *AppMaintenanceSpec {
+	if a == nil {
+		return nil
+	}
+	return a.Maintenance
+}
+
 // GetName returns the Name field.
 func (a *AppSpec) GetName() string {
 	if a == nil {
@@ -1973,12 +2229,28 @@ func (a *AppSpec) GetStaticSites() []*AppStaticSiteSpec {
 	return a.StaticSites
 }
 
+// GetVpc returns the Vpc field.
+func (a *AppSpec) GetVpc() *AppVpcSpec {
+	if a == nil {
+		return nil
+	}
+	return a.Vpc
+}
+
 // GetWorkers returns the Workers field.
 func (a *AppSpec) GetWorkers() []*AppWorkerSpec {
 	if a == nil {
 		return nil
 	}
 	return a.Workers
+}
+
+// GetBitbucket returns the Bitbucket field.
+func (a *AppStaticSiteSpec) GetBitbucket() *BitbucketSourceSpec {
+	if a == nil {
+		return nil
+	}
+	return a.Bitbucket
 }
 
 // GetBuildCommand returns the BuildCommand field.
@@ -2189,6 +2461,38 @@ func (a *AppVariableDefinition) GetValue() string {
 	return a.Value
 }
 
+// GetEgressIPs returns the EgressIPs field.
+func (a *AppVPC) GetEgressIPs() []*AppVPCEgressIP {
+	if a == nil {
+		return nil
+	}
+	return a.EgressIPs
+}
+
+// GetID returns the ID field.
+func (a *AppVPC) GetID() string {
+	if a == nil {
+		return ""
+	}
+	return a.ID
+}
+
+// GetIP returns the IP field.
+func (a *AppVPCEgressIP) GetIP() string {
+	if a == nil {
+		return ""
+	}
+	return a.IP
+}
+
+// GetID returns the ID field.
+func (a *AppVpcSpec) GetID() string {
+	if a == nil {
+		return ""
+	}
+	return a.ID
+}
+
 // GetAlerts returns the Alerts field.
 func (a *AppWorkerSpec) GetAlerts() []*AppAlertSpec {
 	if a == nil {
@@ -2203,6 +2507,14 @@ func (a *AppWorkerSpec) GetAutoscaling() *AppAutoscalingSpec {
 		return nil
 	}
 	return a.Autoscaling
+}
+
+// GetBitbucket returns the Bitbucket field.
+func (a *AppWorkerSpec) GetBitbucket() *BitbucketSourceSpec {
+	if a == nil {
+		return nil
+	}
+	return a.Bitbucket
 }
 
 // GetBuildCommand returns the BuildCommand field.
@@ -2285,6 +2597,14 @@ func (a *AppWorkerSpec) GetInstanceSizeSlug() string {
 	return a.InstanceSizeSlug
 }
 
+// GetLivenessHealthCheck returns the LivenessHealthCheck field.
+func (a *AppWorkerSpec) GetLivenessHealthCheck() *HealthCheckSpec {
+	if a == nil {
+		return nil
+	}
+	return a.LivenessHealthCheck
+}
+
 // GetLogDestinations returns the LogDestinations field.
 func (a *AppWorkerSpec) GetLogDestinations() []*AppLogDestinationSpec {
 	if a == nil {
@@ -2331,6 +2651,78 @@ func (a *AppWorkerSpecTermination) GetGracePeriodSeconds() int32 {
 		return 0
 	}
 	return a.GracePeriodSeconds
+}
+
+// GetFrom returns the From field.
+func (a *AutoscalerActionScaleChange) GetFrom() int64 {
+	if a == nil {
+		return 0
+	}
+	return a.From
+}
+
+// GetTo returns the To field.
+func (a *AutoscalerActionScaleChange) GetTo() int64 {
+	if a == nil {
+		return 0
+	}
+	return a.To
+}
+
+// GetTriggeringMetric returns the TriggeringMetric field.
+func (a *AutoscalerActionScaleChange) GetTriggeringMetric() string {
+	if a == nil {
+		return ""
+	}
+	return a.TriggeringMetric
+}
+
+// GetFrom returns the From field.
+func (a *AutoscalingEventComponentScaleChange) GetFrom() int64 {
+	if a == nil {
+		return 0
+	}
+	return a.From
+}
+
+// GetTo returns the To field.
+func (a *AutoscalingEventComponentScaleChange) GetTo() int64 {
+	if a == nil {
+		return 0
+	}
+	return a.To
+}
+
+// GetTriggeringMetric returns the TriggeringMetric field.
+func (a *AutoscalingEventComponentScaleChange) GetTriggeringMetric() string {
+	if a == nil {
+		return ""
+	}
+	return a.TriggeringMetric
+}
+
+// GetBranch returns the Branch field.
+func (b *BitbucketSourceSpec) GetBranch() string {
+	if b == nil {
+		return ""
+	}
+	return b.Branch
+}
+
+// GetDeployOnPush returns the DeployOnPush field.
+func (b *BitbucketSourceSpec) GetDeployOnPush() bool {
+	if b == nil {
+		return false
+	}
+	return b.DeployOnPush
+}
+
+// GetRepo returns the Repo field.
+func (b *BitbucketSourceSpec) GetRepo() string {
+	if b == nil {
+		return ""
+	}
+	return b.Repo
 }
 
 // GetDescription returns the Description field.
@@ -2387,6 +2779,54 @@ func (b *Buildpack) GetVersion() string {
 		return ""
 	}
 	return b.Version
+}
+
+// GetCPUUsagePercent returns the CPUUsagePercent field.
+func (c *ComponentHealth) GetCPUUsagePercent() float64 {
+	if c == nil {
+		return 0
+	}
+	return c.CPUUsagePercent
+}
+
+// GetMemoryUsagePercent returns the MemoryUsagePercent field.
+func (c *ComponentHealth) GetMemoryUsagePercent() float64 {
+	if c == nil {
+		return 0
+	}
+	return c.MemoryUsagePercent
+}
+
+// GetName returns the Name field.
+func (c *ComponentHealth) GetName() string {
+	if c == nil {
+		return ""
+	}
+	return c.Name
+}
+
+// GetReplicasDesired returns the ReplicasDesired field.
+func (c *ComponentHealth) GetReplicasDesired() int64 {
+	if c == nil {
+		return 0
+	}
+	return c.ReplicasDesired
+}
+
+// GetReplicasReady returns the ReplicasReady field.
+func (c *ComponentHealth) GetReplicasReady() int64 {
+	if c == nil {
+		return 0
+	}
+	return c.ReplicasReady
+}
+
+// GetState returns the State field.
+func (c *ComponentHealth) GetState() ComponentHealthStatus {
+	if c == nil {
+		return ""
+	}
+	return c.State
 }
 
 // GetCause returns the Cause field.
@@ -2597,6 +3037,14 @@ func (d *DeploymentCauseDetailsAutoscalerAction) GetAutoscaled() bool {
 	return d.Autoscaled
 }
 
+// GetScaledComponents returns the ScaledComponents map if it's non-nil, an empty map otherwise.
+func (d *DeploymentCauseDetailsAutoscalerAction) GetScaledComponents() map[string]AutoscalerActionScaleChange {
+	if d == nil || d.ScaledComponents == nil {
+		return map[string]AutoscalerActionScaleChange{}
+	}
+	return d.ScaledComponents
+}
+
 // GetEmail returns the Email field.
 func (d *DeploymentCauseDetailsDigitalOceanUser) GetEmail() string {
 	if d == nil {
@@ -2667,6 +3115,14 @@ func (d *DeploymentCauseDetailsDOCRPush) GetTag() string {
 		return ""
 	}
 	return d.Tag
+}
+
+// GetBitbucket returns the Bitbucket field.
+func (d *DeploymentCauseDetailsGitPush) GetBitbucket() *BitbucketSourceSpec {
+	if d == nil {
+		return nil
+	}
+	return d.Bitbucket
 }
 
 // GetCommitAuthor returns the CommitAuthor field.
@@ -3045,6 +3501,14 @@ func (d *DeployTemplate) GetSpec() *AppSpec {
 	return d.Spec
 }
 
+// GetBitbucket returns the Bitbucket field.
+func (d *DetectRequest) GetBitbucket() *BitbucketSourceSpec {
+	if d == nil {
+		return nil
+	}
+	return d.Bitbucket
+}
+
 // GetCommitSHA returns the CommitSHA field.
 func (d *DetectRequest) GetCommitSHA() string {
 	if d == nil {
@@ -3091,6 +3555,14 @@ func (d *DetectResponse) GetComponents() []*DetectResponseComponent {
 		return nil
 	}
 	return d.Components
+}
+
+// GetPending returns the Pending field.
+func (d *DetectResponse) GetPending() bool {
+	if d == nil {
+		return false
+	}
+	return d.Pending
 }
 
 // GetTemplate returns the Template field.
@@ -3285,12 +3757,132 @@ func (d *DetectResponseServerlessPackage) GetName() string {
 	return d.Name
 }
 
+// GetAutoscaling returns the Autoscaling field.
+func (e *Event) GetAutoscaling() *EventAutoscalingEvent {
+	if e == nil {
+		return nil
+	}
+	return e.Autoscaling
+}
+
+// GetCreatedAt returns the CreatedAt field.
+func (e *Event) GetCreatedAt() time.Time {
+	if e == nil {
+		return time.Time{}
+	}
+	return e.CreatedAt
+}
+
+// GetDeployment returns the Deployment field.
+func (e *Event) GetDeployment() *Deployment {
+	if e == nil {
+		return nil
+	}
+	return e.Deployment
+}
+
+// GetDeploymentID returns the DeploymentID field.
+func (e *Event) GetDeploymentID() string {
+	if e == nil {
+		return ""
+	}
+	return e.DeploymentID
+}
+
+// GetID returns the ID field.
+func (e *Event) GetID() string {
+	if e == nil {
+		return ""
+	}
+	return e.ID
+}
+
+// GetType returns the Type field.
+func (e *Event) GetType() EventType {
+	if e == nil {
+		return ""
+	}
+	return e.Type
+}
+
+// GetComponents returns the Components field.
+func (e *EventAutoscalingEvent) GetComponents() map[string]AutoscalingEventComponentScaleChange {
+	if e == nil {
+		return nil
+	}
+	return e.Components
+}
+
+// GetPhase returns the Phase field.
+func (e *EventAutoscalingEvent) GetPhase() EventAutoscalingEventPhase {
+	if e == nil {
+		return ""
+	}
+	return e.Phase
+}
+
+// GetFunctionsComponentHealthMetrics returns the FunctionsComponentHealthMetrics field.
+func (f *FunctionsComponentHealth) GetFunctionsComponentHealthMetrics() []*FunctionsComponentHealthMetrics {
+	if f == nil {
+		return nil
+	}
+	return f.FunctionsComponentHealthMetrics
+}
+
+// GetName returns the Name field.
+func (f *FunctionsComponentHealth) GetName() string {
+	if f == nil {
+		return ""
+	}
+	return f.Name
+}
+
+// GetMetricLabel returns the MetricLabel field.
+func (f *FunctionsComponentHealthMetrics) GetMetricLabel() string {
+	if f == nil {
+		return ""
+	}
+	return f.MetricLabel
+}
+
+// GetMetricValue returns the MetricValue field.
+func (f *FunctionsComponentHealthMetrics) GetMetricValue() float64 {
+	if f == nil {
+		return 0
+	}
+	return f.MetricValue
+}
+
+// GetTimeWindow returns the TimeWindow field.
+func (f *FunctionsComponentHealthMetrics) GetTimeWindow() string {
+	if f == nil {
+		return ""
+	}
+	return f.TimeWindow
+}
+
 // GetConnectionDetails returns the ConnectionDetails field.
 func (g *GetAppDatabaseConnectionDetailsResponse) GetConnectionDetails() []*GetDatabaseConnectionDetailsResponse {
 	if g == nil {
 		return nil
 	}
 	return g.ConnectionDetails
+}
+
+// GetAppHealth returns the AppHealth field.
+func (g *GetAppHealthResponse) GetAppHealth() *AppHealth {
+	if g == nil {
+		return nil
+	}
+	return g.AppHealth
+}
+
+// GetInstances returns the Instances field.
+func (g *GetAppInstancesResponse) GetInstances() []*AppInstance {
+	if g == nil {
+		return nil
+	}
+	return g.Instances
 }
 
 // GetComponentName returns the ComponentName field.
@@ -3437,6 +4029,14 @@ func (g *GetDatabaseTrustedSourceResponse) GetIsEnabled() bool {
 	return g.IsEnabled
 }
 
+// GetJobInvocation returns the JobInvocation field.
+func (g *GetJobInvocationResponse) GetJobInvocation() *JobInvocation {
+	if g == nil {
+		return nil
+	}
+	return g.JobInvocation
+}
+
 // GetBranch returns the Branch field.
 func (g *GitHubSourceSpec) GetBranch() string {
 	if g == nil {
@@ -3501,6 +4101,62 @@ func (g *GitSourceSpec) GetRepoCloneURL() string {
 	return g.RepoCloneURL
 }
 
+// GetFailureThreshold returns the FailureThreshold field.
+func (h *HealthCheckSpec) GetFailureThreshold() int32 {
+	if h == nil {
+		return 0
+	}
+	return h.FailureThreshold
+}
+
+// GetHTTPPath returns the HTTPPath field.
+func (h *HealthCheckSpec) GetHTTPPath() string {
+	if h == nil {
+		return ""
+	}
+	return h.HTTPPath
+}
+
+// GetInitialDelaySeconds returns the InitialDelaySeconds field.
+func (h *HealthCheckSpec) GetInitialDelaySeconds() int32 {
+	if h == nil {
+		return 0
+	}
+	return h.InitialDelaySeconds
+}
+
+// GetPeriodSeconds returns the PeriodSeconds field.
+func (h *HealthCheckSpec) GetPeriodSeconds() int32 {
+	if h == nil {
+		return 0
+	}
+	return h.PeriodSeconds
+}
+
+// GetPort returns the Port field.
+func (h *HealthCheckSpec) GetPort() int64 {
+	if h == nil {
+		return 0
+	}
+	return h.Port
+}
+
+// GetSuccessThreshold returns the SuccessThreshold field.
+func (h *HealthCheckSpec) GetSuccessThreshold() int32 {
+	if h == nil {
+		return 0
+	}
+	return h.SuccessThreshold
+}
+
+// GetTimeoutSeconds returns the TimeoutSeconds field.
+func (h *HealthCheckSpec) GetTimeoutSeconds() int32 {
+	if h == nil {
+		return 0
+	}
+	return h.TimeoutSeconds
+}
+
 // GetDeployOnPush returns the DeployOnPush field.
 func (i *ImageSourceSpec) GetDeployOnPush() *ImageSourceSpecDeployOnPush {
 	if i == nil {
@@ -3563,6 +4219,110 @@ func (i *ImageSourceSpecDeployOnPush) GetEnabled() bool {
 		return false
 	}
 	return i.Enabled
+}
+
+// GetCustomURL returns the CustomURL field.
+func (i *InactivitySleepLoadingPage) GetCustomURL() string {
+	if i == nil {
+		return ""
+	}
+	return i.CustomURL
+}
+
+// GetEnabled returns the Enabled field.
+func (i *InactivitySleepLoadingPage) GetEnabled() bool {
+	if i == nil {
+		return false
+	}
+	return i.Enabled
+}
+
+// GetCompletedAt returns the CompletedAt field.
+func (j *JobInvocation) GetCompletedAt() time.Time {
+	if j == nil {
+		return time.Time{}
+	}
+	return j.CompletedAt
+}
+
+// GetCreatedAt returns the CreatedAt field.
+func (j *JobInvocation) GetCreatedAt() time.Time {
+	if j == nil {
+		return time.Time{}
+	}
+	return j.CreatedAt
+}
+
+// GetDeploymentID returns the DeploymentID field.
+func (j *JobInvocation) GetDeploymentID() string {
+	if j == nil {
+		return ""
+	}
+	return j.DeploymentID
+}
+
+// GetID returns the ID field.
+func (j *JobInvocation) GetID() string {
+	if j == nil {
+		return ""
+	}
+	return j.ID
+}
+
+// GetJobName returns the JobName field.
+func (j *JobInvocation) GetJobName() string {
+	if j == nil {
+		return ""
+	}
+	return j.JobName
+}
+
+// GetPhase returns the Phase field.
+func (j *JobInvocation) GetPhase() JobInvocationPhase {
+	if j == nil {
+		return ""
+	}
+	return j.Phase
+}
+
+// GetStartedAt returns the StartedAt field.
+func (j *JobInvocation) GetStartedAt() time.Time {
+	if j == nil {
+		return time.Time{}
+	}
+	return j.StartedAt
+}
+
+// GetTrigger returns the Trigger field.
+func (j *JobInvocation) GetTrigger() *JobInvocationTrigger {
+	if j == nil {
+		return nil
+	}
+	return j.Trigger
+}
+
+// GetManual returns the Manual field.
+func (j *JobInvocationTrigger) GetManual() *TriggerMetadataManual {
+	if j == nil {
+		return nil
+	}
+	return j.Manual
+}
+
+// GetScheduled returns the Scheduled field.
+func (j *JobInvocationTrigger) GetScheduled() *TriggerMetadataScheduled {
+	if j == nil {
+		return nil
+	}
+	return j.Scheduled
+}
+
+// GetType returns the Type field.
+func (j *JobInvocationTrigger) GetType() JobInvocationTriggerType {
+	if j == nil {
+		return ""
+	}
+	return j.Type
 }
 
 // GetBuildpacks returns the Buildpacks field.
@@ -3643,6 +4403,22 @@ func (t *ToggleDatabaseTrustedSourceResponse) GetIsEnabled() bool {
 		return false
 	}
 	return t.IsEnabled
+}
+
+// GetUser returns the User field.
+func (t *TriggerMetadataManual) GetUser() *DeploymentCauseDetailsDigitalOceanUser {
+	if t == nil {
+		return nil
+	}
+	return t.User
+}
+
+// GetSchedule returns the Schedule field.
+func (t *TriggerMetadataScheduled) GetSchedule() *AppJobSpecSchedule {
+	if t == nil {
+		return nil
+	}
+	return t.Schedule
 }
 
 // GetAffectedComponents returns the AffectedComponents field.

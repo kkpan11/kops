@@ -4,11 +4,8 @@ package autoscaling
 
 import (
 	"context"
-	"fmt"
-	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/service/autoscaling/types"
 	"github.com/aws/smithy-go/middleware"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
 //	We strongly recommend using a launch template when calling this operation to
@@ -18,7 +15,7 @@ import (
 // Creates an Auto Scaling group with the specified name and attributes.
 //
 // If you exceed your maximum limit of Auto Scaling groups, the call fails. To
-// query this limit, call the DescribeAccountLimitsAPI. For information about updating this limit, see [Quotas for Amazon EC2 Auto Scaling]
+// query this limit, call the [DescribeAccountLimits]API. For information about updating this limit, see [Quotas for Amazon EC2 Auto Scaling]
 // in the Amazon EC2 Auto Scaling User Guide.
 //
 // If you're new to Amazon EC2 Auto Scaling, see the introductory tutorials in [Get started with Amazon EC2 Auto Scaling] in
@@ -30,6 +27,7 @@ import (
 // weights for the instance types, you must specify these sizes with the same units
 // that you use for weighting instances.
 //
+// [DescribeAccountLimits]: https://docs.aws.amazon.com/autoscaling/ec2/APIReference/API_DescribeAccountLimits.html
 // [Get started with Amazon EC2 Auto Scaling]: https://docs.aws.amazon.com/autoscaling/ec2/userguide/get-started-with-ec2-auto-scaling.html
 // [Quotas for Amazon EC2 Auto Scaling]: https://docs.aws.amazon.com/autoscaling/ec2/userguide/ec2-auto-scaling-quotas.html
 func (c *Client) CreateAutoScalingGroup(ctx context.Context, params *CreateAutoScalingGroupInput, optFns ...func(*Options)) (*CreateAutoScalingGroupOutput, error) {
@@ -76,6 +74,17 @@ type CreateAutoScalingGroupInput struct {
 	// This member is required.
 	MinSize *int32
 
+	// The instance capacity distribution across Availability Zones.
+	AvailabilityZoneDistribution *types.AvailabilityZoneDistribution
+
+	//  A list of Availability Zone IDs where the Auto Scaling group can launch
+	// instances. You cannot specify both AvailabilityZones and AvailabilityZoneIds in
+	// the same request.
+	AvailabilityZoneIds []string
+
+	//  The policy for Availability Zone impairment.
+	AvailabilityZoneImpairmentPolicy *types.AvailabilityZoneImpairmentPolicy
+
 	// A list of Availability Zones where instances in the Auto Scaling group can be
 	// created. Used for launching into the default VPC subnet in each Availability
 	// Zone when not using the VPCZoneIdentifier property, or for attaching a network
@@ -92,6 +101,9 @@ type CreateAutoScalingGroupInput struct {
 	//
 	// [Use Capacity Rebalancing to handle Amazon EC2 Spot Interruptions]: https://docs.aws.amazon.com/autoscaling/ec2/userguide/ec2-auto-scaling-capacity-rebalancing.html
 	CapacityRebalance *bool
+
+	//  The capacity reservation specification for the Auto Scaling group.
+	CapacityReservationSpecification *types.CapacityReservationSpecification
 
 	// Reserved.
 	Context *string
@@ -128,6 +140,21 @@ type CreateAutoScalingGroupInput struct {
 	//
 	// [Set the default instance warmup for an Auto Scaling group]: https://docs.aws.amazon.com/autoscaling/ec2/userguide/ec2-auto-scaling-default-instance-warmup.html
 	DefaultInstanceWarmup *int32
+
+	//  The deletion protection setting for the Auto Scaling group. This setting helps
+	// safeguard your Auto Scaling group and its instances by controlling whether the
+	// DeleteAutoScalingGroup operation is allowed. When deletion protection is
+	// enabled, users cannot delete the Auto Scaling group according to the specified
+	// protection level until the setting is changed back to a less restrictive level.
+	//
+	// The valid values are none , prevent-force-deletion , and prevent-all-deletion .
+	//
+	// Default: none
+	//
+	// For more information, see [Configure deletion protection for your Amazon EC2 Auto Scaling resources] in the Amazon EC2 Auto Scaling User Guide.
+	//
+	// [Configure deletion protection for your Amazon EC2 Auto Scaling resources]: https://docs.aws.amazon.com/autoscaling/ec2/userguide/resource-deletion-protection.html
+	DeletionProtection types.DeletionProtection
 
 	// The desired capacity is the initial capacity of the Auto Scaling group at the
 	// time of its creation and the capacity it attempts to maintain. It can scale
@@ -182,6 +209,19 @@ type CreateAutoScalingGroupInput struct {
 	// [Create an Auto Scaling group using parameters from an existing instance]: https://docs.aws.amazon.com/autoscaling/ec2/userguide/create-asg-from-instance.html
 	// [DescribeInstances]: https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_DescribeInstances.html
 	InstanceId *string
+
+	//  The instance lifecycle policy for the Auto Scaling group. This policy controls
+	// instance behavior when an instance transitions through its lifecycle states.
+	// Configure retention triggers to specify when instances should move to a Retained
+	// state instead of automatic termination.
+	//
+	// For more information, see [Control instance retention with instance lifecycle policies] in the Amazon EC2 Auto Scaling User Guide.
+	//
+	// Instances in a Retained state will continue to incur standard EC2 charges until
+	// terminated.
+	//
+	// [Control instance retention with instance lifecycle policies]: https://docs.aws.amazon.com/autoscaling/ec2/userguide/instance-lifecycle-policy.html
+	InstanceLifecyclePolicy *types.InstanceLifecyclePolicy
 
 	// An instance maintenance policy. For more information, see [Set instance maintenance policy] in the Amazon EC2
 	// Auto Scaling User Guide.
@@ -241,8 +281,15 @@ type CreateAutoScalingGroupInput struct {
 	// [Use instance scale-in protection]: https://docs.aws.amazon.com/autoscaling/ec2/userguide/ec2-auto-scaling-instance-protection.html
 	NewInstancesProtectedFromScaleIn *bool
 
+	// The entity that manages the Auto Scaling group. If you specify this parameter,
+	// Amazon EC2 Auto Scaling passes the operator identity to EC2 for instance
+	// launches and only allows the designated operator to make changes to the Auto
+	// Scaling group. All mutating API calls from non-operator callers are rejected
+	// with an AccessDenied exception.
+	Operator *types.Operator
+
 	// The name of the placement group into which to launch your instances. For more
-	// information, see [Placement groups]in the Amazon EC2 User Guide for Linux Instances.
+	// information, see [Placement groups]in the Amazon EC2 User Guide.
 	//
 	// A cluster placement group is a logical grouping of instances within a single
 	// Availability Zone. You cannot specify multiple Availability Zones and a cluster
@@ -259,6 +306,14 @@ type CreateAutoScalingGroupInput struct {
 	//
 	// [Service-linked roles]: https://docs.aws.amazon.com/autoscaling/ec2/userguide/autoscaling-service-linked-role.html
 	ServiceLinkedRoleARN *string
+
+	//  If you enable zonal shift with cross-zone disabled load balancers, capacity
+	// could become imbalanced across Availability Zones. To skip the validation,
+	// specify true . For more information, see [Auto Scaling group zonal shift] in the Amazon EC2 Auto Scaling User
+	// Guide.
+	//
+	// [Auto Scaling group zonal shift]: https://docs.aws.amazon.com/autoscaling/ec2/userguide/ec2-auto-scaling-zonal-shift.html
+	SkipZonalShiftValidation *bool
 
 	// One or more tags. You can tag your Auto Scaling group and propagate the tags to
 	// the Amazon EC2 instances it launches. Tags are not propagated to Amazon EBS
@@ -316,9 +371,6 @@ type CreateAutoScalingGroupOutput struct {
 }
 
 func (c *Client) addOperationCreateAutoScalingGroupMiddlewares(stack *middleware.Stack, options Options) (err error) {
-	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
-		return err
-	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpCreateAutoScalingGroup{}, middleware.After)
 	if err != nil {
 		return err
@@ -327,19 +379,7 @@ func (c *Client) addOperationCreateAutoScalingGroupMiddlewares(stack *middleware
 	if err != nil {
 		return err
 	}
-	if err := addProtocolFinalizerMiddlewares(stack, options, "CreateAutoScalingGroup"); err != nil {
-		return fmt.Errorf("add protocol finalizers: %v", err)
-	}
 
-	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
-		return err
-	}
-	if err = addSetLoggerMiddleware(stack, options); err != nil {
-		return err
-	}
-	if err = addClientRequestID(stack); err != nil {
-		return err
-	}
 	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
@@ -349,40 +389,13 @@ func (c *Client) addOperationCreateAutoScalingGroupMiddlewares(stack *middleware
 	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetry(stack, options); err != nil {
+	if err = addRecordResponseTiming(stack, options); err != nil {
 		return err
 	}
-	if err = addRawResponseToMetadata(stack); err != nil {
-		return err
-	}
-	if err = addRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack, options); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addTimeOffsetBuild(stack, c); err != nil {
-		return err
-	}
-	if err = addUserAgentRetryMode(stack, options); err != nil {
+	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
 	if err = addOpCreateAutoScalingGroupValidationMiddleware(stack); err != nil {
-		return err
-	}
-	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opCreateAutoScalingGroup(options.Region), middleware.Before); err != nil {
-		return err
-	}
-	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -397,13 +410,8 @@ func (c *Client) addOperationCreateAutoScalingGroupMiddlewares(stack *middleware
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
-	return nil
-}
-
-func newServiceMetadataMiddleware_opCreateAutoScalingGroup(region string) *awsmiddleware.RegisterServiceMetadata {
-	return &awsmiddleware.RegisterServiceMetadata{
-		Region:        region,
-		ServiceID:     ServiceID,
-		OperationName: "CreateAutoScalingGroup",
+	if err = addInterceptors(stack, options); err != nil {
+		return err
 	}
+	return nil
 }

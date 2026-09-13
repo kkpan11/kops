@@ -275,8 +275,22 @@ type AliasTarget struct {
 	// similar function. Do not create Route 53 health checks for the EC2 instances
 	// that you register with an ELB load balancer.
 	//
+	// API Gateway APIs There are no special requirements for setting
+	// EvaluateTargetHealth to true when the alias target is an API Gateway API.
+	// However, because API Gateway is highly available by design, EvaluateTargetHealth
+	// provides no operational benefit and [Route 53 health checks]are recommended instead for failover
+	// scenarios.
+	//
 	// S3 buckets There are no special requirements for setting EvaluateTargetHealth
-	// to true when the alias target is an S3 bucket.
+	// to true when the alias target is an S3 bucket. However, because S3 buckets are
+	// highly available by design, EvaluateTargetHealth provides no operational
+	// benefit and [Route 53 health checks]are recommended instead for failover scenarios.
+	//
+	// VPC interface endpoints There are no special requirements for setting
+	// EvaluateTargetHealth to true when the alias target is a VPC interface endpoint.
+	// However, because VPC interface endpoints are highly available by design,
+	// EvaluateTargetHealth provides no operational benefit and [Route 53 health checks] are recommended
+	// instead for failover scenarios.
 	//
 	// Other records in the same hosted zone If the Amazon Web Services resource that
 	// you specify in DNSName is a record or a group of records (for example, a group
@@ -284,8 +298,16 @@ type AliasTarget struct {
 	// associate a health check with all of the records in the alias target. For more
 	// information, see [What Happens When You Omit Health Checks?]in the Amazon Route 53 Developer Guide.
 	//
+	// While EvaluateTargetHealth can be set to true for highly available Amazon Web
+	// Services services (such as S3 buckets, VPC interface endpoints, and API
+	// Gateway), these services are designed for high availability and rarely
+	// experience outages that would be detected by this feature. For failover
+	// scenarios with these services, consider using [Route 53 health checks]that monitor your application's
+	// ability to access the service instead.
+	//
 	// For more information and examples, see [Amazon Route 53 Health Checks and DNS Failover] in the Amazon Route 53 Developer Guide.
 	//
+	// [Route 53 health checks]: https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/dns-failover.html
 	// [Amazon Route 53 Health Checks and DNS Failover]: https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/dns-failover.html
 	// [What Happens When You Omit Health Checks?]: https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/dns-failover-complex-configs.html#dns-failover-complex-configs-hc-omitting
 	//
@@ -875,8 +897,8 @@ type HealthCheckConfig struct {
 	//   53 submits an HTTPS request and waits for an HTTP status code of 200 or greater
 	//   and less than 400.
 	//
-	// If you specify HTTPS for the value of Type , the endpoint must support TLS v1.0
-	//   or later.
+	// If you specify HTTPS for the value of Type , the endpoint must support TLS v1.0,
+	//   v1.1, or v1.2.
 	//
 	//   - HTTP_STR_MATCH: Route 53 tries to establish a TCP connection. If
 	//   successful, Route 53 submits an HTTP request and searches the first 5,120 bytes
@@ -973,8 +995,11 @@ type HealthCheckConfig struct {
 	// healthy or vice versa. For more information, see [How Amazon Route 53 Determines Whether an Endpoint Is Healthy]in the Amazon Route 53
 	// Developer Guide.
 	//
-	// If you don't specify a value for FailureThreshold , the default value is three
-	// health checks.
+	// FailureThreshold is not supported when you specify a value for Type of
+	// RECOVERY_CONTROL .
+	//
+	// Otherwise, if you don't specify a value for FailureThreshold , the default value
+	// is three health checks.
 	//
 	// [How Amazon Route 53 Determines Whether an Endpoint Is Healthy]: https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/dns-failover-determining-health-of-endpoints.html
 	FailureThreshold *int32
@@ -1121,6 +1146,9 @@ type HealthCheckConfig struct {
 	// display CloudWatch latency graphs on the Health Checks page in the Route 53
 	// console.
 	//
+	// MeasureLatency is not supported when you specify a value for Type of
+	// RECOVERY_CONTROL .
+	//
 	// You can't change the value of MeasureLatency after you create a health check.
 	MeasureLatency *bool
 
@@ -1146,6 +1174,9 @@ type HealthCheckConfig struct {
 	// The number of seconds between the time that Amazon Route 53 gets a response
 	// from your endpoint and the time that it sends the next health check request.
 	// Each Route 53 health checker makes requests at this interval.
+	//
+	// RequestInterval is not supported when you specify a value for Type of
+	// RECOVERY_CONTROL .
 	//
 	// You can't change the value of RequestInterval after you create a health check.
 	//
@@ -1228,6 +1259,10 @@ type HostedZone struct {
 	// and Comment elements don't appear in the response.
 	Config *HostedZoneConfig
 
+	// The features configuration for the hosted zone, including accelerated recovery
+	// settings and status information.
+	Features *HostedZoneFeatures
+
 	// If the hosted zone was created by another service, the service that created the
 	// hosted zone. When a hosted zone is created by another service, you can't edit or
 	// delete it using Route 53.
@@ -1249,6 +1284,31 @@ type HostedZoneConfig struct {
 
 	// A value that indicates whether this is a private hosted zone.
 	PrivateZone bool
+
+	noSmithyDocumentSerde
+}
+
+// Contains information about why certain features failed to be enabled or
+// configured for the hosted zone.
+type HostedZoneFailureReasons struct {
+
+	// The reason why accelerated recovery failed to be enabled or disabled for the
+	// hosted zone, if applicable.
+	AcceleratedRecovery *string
+
+	noSmithyDocumentSerde
+}
+
+// Represents the features configuration for a hosted zone, including the status
+// of various features and any associated failure reasons.
+type HostedZoneFeatures struct {
+
+	// The current status of accelerated recovery for the hosted zone.
+	AcceleratedRecoveryStatus AcceleratedRecoveryStatus
+
+	// Information about any failures that occurred when attempting to enable or
+	// configure features for the hosted zone.
+	FailureReasons *HostedZoneFailureReasons
 
 	noSmithyDocumentSerde
 }
@@ -1569,15 +1629,16 @@ type ResourceRecordSet struct {
 	// is encoded for them, see [Supported DNS Resource Record Types]in the Amazon Route 53 Developer Guide.
 	//
 	// Valid values for basic resource record sets: A | AAAA | CAA | CNAME | DS | MX |
-	// NAPTR | NS | PTR | SOA | SPF | SRV | TXT
+	// NAPTR | NS | PTR | SOA | SPF | SRV | TXT | TLSA | SSHFP | SVCB | HTTPS
 	//
 	// Values for weighted, latency, geolocation, and failover resource record sets: A
-	// | AAAA | CAA | CNAME | MX | NAPTR | PTR | SPF | SRV | TXT . When creating a
-	// group of weighted, latency, geolocation, or failover resource record sets,
-	// specify the same value for all of the resource record sets in the group.
+	// | AAAA | CAA | CNAME | MX | NAPTR | PTR | SPF | SRV | TXT | TLSA | SSHFP | SVCB
+	// | HTTPS . When creating a group of weighted, latency, geolocation, or failover
+	// resource record sets, specify the same value for all of the resource record sets
+	// in the group.
 	//
 	// Valid values for multivalue answer resource record sets: A | AAAA | MX | NAPTR
-	// | PTR | SPF | SRV | TXT
+	// | PTR | SPF | SRV | TXT | CAA | TLSA | SSHFP | SVCB | HTTPS
 	//
 	// SPF records were formerly used to verify the identity of the sender of email
 	// messages. However, we no longer recommend that you create resource record sets

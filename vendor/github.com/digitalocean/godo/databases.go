@@ -2,40 +2,55 @@ package godo
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"math/big"
 	"net/http"
 	"strings"
 	"time"
 )
 
 const (
-	databaseBasePath                    = "/v2/databases"
-	databaseSinglePath                  = databaseBasePath + "/%s"
-	databaseCAPath                      = databaseBasePath + "/%s/ca"
-	databaseConfigPath                  = databaseBasePath + "/%s/config"
-	databaseResizePath                  = databaseBasePath + "/%s/resize"
-	databaseMigratePath                 = databaseBasePath + "/%s/migrate"
-	databaseMaintenancePath             = databaseBasePath + "/%s/maintenance"
-	databaseBackupsPath                 = databaseBasePath + "/%s/backups"
-	databaseUsersPath                   = databaseBasePath + "/%s/users"
-	databaseUserPath                    = databaseBasePath + "/%s/users/%s"
-	databaseResetUserAuthPath           = databaseUserPath + "/reset_auth"
-	databaseDBPath                      = databaseBasePath + "/%s/dbs/%s"
-	databaseDBsPath                     = databaseBasePath + "/%s/dbs"
-	databasePoolPath                    = databaseBasePath + "/%s/pools/%s"
-	databasePoolsPath                   = databaseBasePath + "/%s/pools"
-	databaseReplicaPath                 = databaseBasePath + "/%s/replicas/%s"
-	databaseReplicasPath                = databaseBasePath + "/%s/replicas"
-	databaseEvictionPolicyPath          = databaseBasePath + "/%s/eviction_policy"
-	databaseSQLModePath                 = databaseBasePath + "/%s/sql_mode"
-	databaseFirewallRulesPath           = databaseBasePath + "/%s/firewall"
-	databaseOptionsPath                 = databaseBasePath + "/options"
-	databaseUpgradeMajorVersionPath     = databaseBasePath + "/%s/upgrade"
-	databasePromoteReplicaToPrimaryPath = databaseReplicaPath + "/promote"
-	databaseTopicPath                   = databaseBasePath + "/%s/topics/%s"
-	databaseTopicsPath                  = databaseBasePath + "/%s/topics"
-	databaseMetricsCredentialsPath      = databaseBasePath + "/metrics/credentials"
-	databaseEvents                      = databaseBasePath + "/%s/events"
+	databaseBasePath                             = "/v2/databases"
+	databaseSinglePath                           = databaseBasePath + "/%s"
+	databaseCAPath                               = databaseBasePath + "/%s/ca"
+	databaseConfigPath                           = databaseBasePath + "/%s/config"
+	databaseResizePath                           = databaseBasePath + "/%s/resize"
+	databaseMigratePath                          = databaseBasePath + "/%s/migrate"
+	databaseMaintenancePath                      = databaseBasePath + "/%s/maintenance"
+	databaseUpdateInstallationPath               = databaseBasePath + "/%s/install_update"
+	databaseBackupsPath                          = databaseBasePath + "/%s/backups"
+	databaseUsersPath                            = databaseBasePath + "/%s/users"
+	databaseUserPath                             = databaseBasePath + "/%s/users/%s"
+	databaseResetUserAuthPath                    = databaseUserPath + "/reset_auth"
+	databaseDBPath                               = databaseBasePath + "/%s/dbs/%s"
+	databaseDBsPath                              = databaseBasePath + "/%s/dbs"
+	databasePoolPath                             = databaseBasePath + "/%s/pools/%s"
+	databasePoolsPath                            = databaseBasePath + "/%s/pools"
+	databaseReplicaPath                          = databaseBasePath + "/%s/replicas/%s"
+	databaseReplicasPath                         = databaseBasePath + "/%s/replicas"
+	databaseEvictionPolicyPath                   = databaseBasePath + "/%s/eviction_policy"
+	databaseSQLModePath                          = databaseBasePath + "/%s/sql_mode"
+	databaseFirewallRulesPath                    = databaseBasePath + "/%s/firewall"
+	databaseDOSettingsPath                       = databaseBasePath + "/%s/do_settings"
+	databaseOptionsPath                          = databaseBasePath + "/options"
+	databaseUpgradeMajorVersionPath              = databaseBasePath + "/%s/upgrade"
+	databasePromoteReplicaToPrimaryPath          = databaseReplicaPath + "/promote"
+	databaseTopicPath                            = databaseBasePath + "/%s/topics/%s"
+	databaseTopicsPath                           = databaseBasePath + "/%s/topics"
+	databaseMetricsCredentialsPath               = databaseBasePath + "/metrics/credentials"
+	databaseEvents                               = databaseBasePath + "/%s/events"
+	databaseIndexesPath                          = databaseBasePath + "/%s/indexes"
+	databaseIndexPath                            = databaseBasePath + "/%s/indexes/%s"
+	databaseLogsinkPath                          = databaseBasePath + "/%s/logsink/%s"
+	databaseLogsinksPath                         = databaseBasePath + "/%s/logsink"
+	databaseOnlineMigrationsPath                 = databaseBasePath + "/%s/online-migration"
+	databaseOnlineMigrationPath                  = databaseBasePath + "/%s/online-migration/%s"
+	databaseKafkaSchemaRegistryPath              = databaseBasePath + "/%s/schema-registry"
+	databaseKafkaSchemaRegistrySubjectPath       = databaseBasePath + "/%s/schema-registry/%s"
+	databaseKafkaSchemaRegistryConfigPath        = databaseBasePath + "/%s/schema-registry/config"
+	databaseKafkaSchemaRegistrySubjectConfigPath = databaseBasePath + "/%s/schema-registry/config/%s"
+	databaseStorageAutoscalePath                 = databaseBasePath + "/%s/autoscale"
 )
 
 // SQL Mode constants allow for MySQL-specific SQL flavor configuration.
@@ -116,6 +131,9 @@ type DatabasesService interface {
 	Resize(context.Context, string, *DatabaseResizeRequest) (*Response, error)
 	Migrate(context.Context, string, *DatabaseMigrateRequest) (*Response, error)
 	UpdateMaintenance(context.Context, string, *DatabaseUpdateMaintenanceRequest) (*Response, error)
+	GetStorageAutoscale(context.Context, string) (*DatabaseStorageAutoscale, *Response, error)
+	UpdateStorageAutoscale(context.Context, string, *DatabaseStorageAutoscale) (*Response, error)
+	InstallUpdate(context.Context, string) (*Response, error)
 	ListBackups(context.Context, string, *ListOptions) ([]DatabaseBackup, *Response, error)
 	GetUser(context.Context, string, string) (*DatabaseUser, *Response, error)
 	ListUsers(context.Context, string, *ListOptions) ([]DatabaseUser, *Response, error)
@@ -143,12 +161,26 @@ type DatabasesService interface {
 	SetSQLMode(context.Context, string, ...string) (*Response, error)
 	GetFirewallRules(context.Context, string) ([]DatabaseFirewallRule, *Response, error)
 	UpdateFirewallRules(context.Context, string, *DatabaseUpdateFirewallRulesRequest) (*Response, error)
+	GetDOSettings(context.Context, string) (*DOSettings, *Response, error)
+	UpdateDOSettings(context.Context, string, *DatabaseUpdateDOSettingsRequest) (*Response, error)
 	GetPostgreSQLConfig(context.Context, string) (*PostgreSQLConfig, *Response, error)
 	GetRedisConfig(context.Context, string) (*RedisConfig, *Response, error)
+	GetValkeyConfig(context.Context, string) (*ValkeyConfig, *Response, error)
 	GetMySQLConfig(context.Context, string) (*MySQLConfig, *Response, error)
+	GetMongoDBConfig(context.Context, string) (*MongoDBConfig, *Response, error)
+	GetOpensearchConfig(context.Context, string) (*OpensearchConfig, *Response, error)
+	GetKafkaConfig(context.Context, string) (*KafkaConfig, *Response, error)
+	GetAdvancedPostgresSQLConfig(context.Context, string) (*AdvancedPostgresConfig, *Response, error)
+	GetAdvancedMySQLConfig(context.Context, string) (*AdvancedMySQLConfig, *Response, error)
 	UpdatePostgreSQLConfig(context.Context, string, *PostgreSQLConfig) (*Response, error)
 	UpdateRedisConfig(context.Context, string, *RedisConfig) (*Response, error)
+	UpdateValkeyConfig(context.Context, string, *ValkeyConfig) (*Response, error)
 	UpdateMySQLConfig(context.Context, string, *MySQLConfig) (*Response, error)
+	UpdateMongoDBConfig(context.Context, string, *MongoDBConfig) (*Response, error)
+	UpdateOpensearchConfig(context.Context, string, *OpensearchConfig) (*Response, error)
+	UpdateKafkaConfig(context.Context, string, *KafkaConfig) (*Response, error)
+	UpdateAdvancedPostgresSQLConfig(context.Context, string, *AdvancedPostgresConfigUpdate) (*Response, error)
+	UpdateAdvancedMySQLConfig(context.Context, string, *AdvancedMySQLConfigUpdate) (*Response, error)
 	ListOptions(todo context.Context) (*DatabaseOptions, *Response, error)
 	UpgradeMajorVersion(context.Context, string, *UpgradeVersionRequest) (*Response, error)
 	ListTopics(context.Context, string, *ListOptions) ([]DatabaseTopic, *Response, error)
@@ -159,6 +191,24 @@ type DatabasesService interface {
 	GetMetricsCredentials(context.Context) (*DatabaseMetricsCredentials, *Response, error)
 	UpdateMetricsCredentials(context.Context, *DatabaseUpdateMetricsCredentialsRequest) (*Response, error)
 	ListDatabaseEvents(context.Context, string, *ListOptions) ([]DatabaseEvent, *Response, error)
+	ListIndexes(context.Context, string, *ListOptions) ([]DatabaseIndex, *Response, error)
+	DeleteIndex(context.Context, string, string) (*Response, error)
+	CreateLogsink(ctx context.Context, databaseID string, createLogsink *DatabaseCreateLogsinkRequest) (*DatabaseLogsink, *Response, error)
+	GetLogsink(ctx context.Context, databaseID string, logsinkID string) (*DatabaseLogsink, *Response, error)
+	ListLogsinks(ctx context.Context, databaseID string, opts *ListOptions) ([]DatabaseLogsink, *Response, error)
+	UpdateLogsink(ctx context.Context, databaseID string, logsinkID string, updateLogsink *DatabaseUpdateLogsinkRequest) (*Response, error)
+	DeleteLogsink(ctx context.Context, databaseID, logsinkID string) (*Response, error)
+	StartOnlineMigration(ctx context.Context, databaseID string, onlineMigrationRequest *DatabaseStartOnlineMigrationRequest) (*DatabaseOnlineMigrationStatus, *Response, error)
+	StopOnlineMigration(ctx context.Context, databaseID, migrationID string) (*Response, error)
+	GetOnlineMigrationStatus(ctx context.Context, databaseID string) (*DatabaseOnlineMigrationStatus, *Response, error)
+	ListKafkaSchemaRegistry(ctx context.Context, databaseID string, opts *ListOptions) ([]DatabaseKafkaSchemaRegistrySubject, *Response, error)
+	CreateKafkaSchemaRegistry(ctx context.Context, databaseID string, createKafkaSchemaRegistry *DatabaseKafkaSchemaRegistryRequest) (*DatabaseKafkaSchemaRegistrySubject, *Response, error)
+	GetKafkaSchemaRegistry(ctx context.Context, databaseID, subject string) (*DatabaseKafkaSchemaRegistrySubject, *Response, error)
+	DeleteKafkaSchemaRegistry(ctx context.Context, databaseID, subject string) (*Response, error)
+	GetKafkaSchemaRegistryConfig(ctx context.Context, databaseID string) (*DatabaseKafkaSchemaRegistryConfig, *Response, error)
+	UpdateKafkaSchemaRegistryConfig(ctx context.Context, databaseID string, updateKafkaSchemaRegistryConfig *DatabaseKafkaSchemaRegistryConfig) (*DatabaseKafkaSchemaRegistryConfig, *Response, error)
+	GetKafkaSchemaRegistrySubjectConfig(ctx context.Context, databaseID, subject string) (*DatabaseKafkaSchemaRegistrySubjectConfigResponse, *Response, error)
+	UpdateKafkaSchemaRegistrySubjectConfig(ctx context.Context, databaseID, subject string, updateKafkaSchemaRegistrySubjectConfig *DatabaseKafkaSchemaRegistryConfig) (*DatabaseKafkaSchemaRegistrySubjectConfigResponse, *Response, error)
 }
 
 // DatabasesServiceOp handles communication with the Databases related methods
@@ -196,7 +246,9 @@ type Database struct {
 	Tags                     []string                   `json:"tags,omitempty"`
 	ProjectID                string                     `json:"project_id,omitempty"`
 	StorageSizeMib           uint64                     `json:"storage_size_mib,omitempty"`
+	StorageAutoscale         *DatabaseStorageAutoscale  `json:"storage_autoscale,omitempty"`
 	MetricsEndpoints         []*ServiceAddress          `json:"metrics_endpoints,omitempty"`
+	DOSettings               *DOSettings                `json:"do_settings,omitempty"`
 }
 
 // DatabaseCA represents a database ca.
@@ -223,6 +275,21 @@ type ServiceAddress struct {
 	Port int    `json:"port"`
 }
 
+// DOSettings contains DigitalOcean-specific settings for a database cluster.
+type DOSettings struct {
+	ServiceCnames []string `json:"service_cnames,omitempty"`
+}
+
+// doSettingsRoot is the API response wrapper for GET /do_settings.
+type doSettingsRoot struct {
+	DOSettings *DOSettings `json:"do_settings"`
+}
+
+// DatabaseUpdateDOSettingsRequest is used to update DigitalOcean-specific settings.
+type DatabaseUpdateDOSettingsRequest struct {
+	DOSettings *DOSettings `json:"do_settings"`
+}
+
 // DatabaseUser represents a user in the database
 type DatabaseUser struct {
 	Name          string                     `json:"name,omitempty"`
@@ -241,9 +308,23 @@ type KafkaACL struct {
 	Topic      string `json:"topic,omitempty"`
 }
 
-// DatabaseUserSettings contains Kafka-specific user settings
+// OpenSearchACL contains OpenSearch specific user access control information
+type OpenSearchACL struct {
+	Permission string `json:"permission,omitempty"`
+	Index      string `json:"index,omitempty"`
+}
+
+// MongoUserSettings represents additional settings for MongoDB users.
+type MongoUserSettings struct {
+	Databases []string `json:"databases,omitempty"`
+	Role      string   `json:"role,omitempty"`
+}
+
+// DatabaseUserSettings contains user settings
 type DatabaseUserSettings struct {
-	ACL []*KafkaACL `json:"acl,omitempty"`
+	ACL               []*KafkaACL        `json:"acl,omitempty"`
+	OpenSearchACL     []*OpenSearchACL   `json:"opensearch_acl,omitempty"`
+	MongoUserSettings *MongoUserSettings `json:"mongo_user_settings,omitempty"`
 }
 
 // DatabaseMySQLUserSettings contains MySQL-specific user settings
@@ -266,25 +347,42 @@ type DatabaseBackup struct {
 	SizeGigabytes float64   `json:"size_gigabytes,omitempty"`
 }
 
+// DatabaseStorageAutoscale represents the storage autoscaling configuration for a database cluster
+type DatabaseStorageAutoscale struct {
+	Enabled          bool    `json:"enabled"`
+	ThresholdPercent *int    `json:"threshold_percent,omitempty"`
+	IncrementGib     *uint64 `json:"increment_gib,omitempty"`
+}
+
 // DatabaseBackupRestore contains information needed to restore a backup.
 type DatabaseBackupRestore struct {
 	DatabaseName    string `json:"database_name,omitempty"`
 	BackupCreatedAt string `json:"backup_created_at,omitempty"`
 }
 
+// DatabaseCreateFirewallRule is a rule describing an inbound source to a database
+type DatabaseCreateFirewallRule struct {
+	UUID  string `json:"uuid"`
+	Type  string `json:"type"`
+	Value string `json:"value"`
+}
+
 // DatabaseCreateRequest represents a request to create a database cluster
 type DatabaseCreateRequest struct {
-	Name               string                 `json:"name,omitempty"`
-	EngineSlug         string                 `json:"engine,omitempty"`
-	Version            string                 `json:"version,omitempty"`
-	SizeSlug           string                 `json:"size,omitempty"`
-	Region             string                 `json:"region,omitempty"`
-	NumNodes           int                    `json:"num_nodes,omitempty"`
-	PrivateNetworkUUID string                 `json:"private_network_uuid"`
-	Tags               []string               `json:"tags,omitempty"`
-	BackupRestore      *DatabaseBackupRestore `json:"backup_restore,omitempty"`
-	ProjectID          string                 `json:"project_id"`
-	StorageSizeMib     uint64                 `json:"storage_size_mib,omitempty"`
+	Name               string                        `json:"name,omitempty"`
+	EngineSlug         string                        `json:"engine,omitempty"`
+	Version            string                        `json:"version,omitempty"`
+	SizeSlug           string                        `json:"size,omitempty"`
+	Region             string                        `json:"region,omitempty"`
+	NumNodes           int                           `json:"num_nodes,omitempty"`
+	PrivateNetworkUUID string                        `json:"private_network_uuid"`
+	Tags               []string                      `json:"tags,omitempty"`
+	BackupRestore      *DatabaseBackupRestore        `json:"backup_restore,omitempty"`
+	ProjectID          string                        `json:"project_id"`
+	StorageSizeMib     uint64                        `json:"storage_size_mib,omitempty"`
+	StorageAutoscale   *DatabaseStorageAutoscale     `json:"storage_autoscale,omitempty"`
+	Rules              []*DatabaseCreateFirewallRule `json:"rules"`
+	DOSettings         *DOSettings                   `json:"do_settings,omitempty"`
 }
 
 // DatabaseResizeRequest can be used to initiate a database resize operation.
@@ -321,6 +419,21 @@ type DatabaseTopic struct {
 	ReplicationFactor *uint32           `json:"replication_factor,omitempty"`
 	State             string            `json:"state,omitempty"`
 	Config            *TopicConfig      `json:"config,omitempty"`
+}
+
+// DatabaseLogsink represents a logsink
+type DatabaseLogsink struct {
+	ID     string                 `json:"sink_id"`
+	Name   string                 `json:"sink_name,omitempty"`
+	Type   string                 `json:"sink_type,omitempty"`
+	Config *DatabaseLogsinkConfig `json:"config,omitempty"`
+}
+
+// DatabaseOnlineMigrationStatus represents an online migration status
+type DatabaseOnlineMigrationStatus struct {
+	ID        string `json:"id"`
+	Status    string `json:"status"`
+	CreatedAt string `json:"created_at"`
 }
 
 // TopicPartition represents the state of a Kafka topic partition
@@ -393,6 +506,7 @@ type DatabaseReplica struct {
 	Tags               []string            `json:"tags,omitempty"`
 	StorageSizeMib     uint64              `json:"storage_size_mib,omitempty"`
 	Size               string              `json:"size"`
+	DOSettings         *DOSettings         `json:"do_settings,omitempty"`
 }
 
 // DatabasePool represents a database connection pool
@@ -450,12 +564,13 @@ type DatabaseCreateDBRequest struct {
 
 // DatabaseCreateReplicaRequest is used to create a new read-only replica
 type DatabaseCreateReplicaRequest struct {
-	Name               string   `json:"name"`
-	Region             string   `json:"region"`
-	Size               string   `json:"size"`
-	PrivateNetworkUUID string   `json:"private_network_uuid"`
-	Tags               []string `json:"tags,omitempty"`
-	StorageSizeMib     uint64   `json:"storage_size_mib,omitempty"`
+	Name               string      `json:"name"`
+	Region             string      `json:"region"`
+	Size               string      `json:"size"`
+	PrivateNetworkUUID string      `json:"private_network_uuid"`
+	Tags               []string    `json:"tags,omitempty"`
+	StorageSizeMib     uint64      `json:"storage_size_mib,omitempty"`
+	DOSettings         *DOSettings `json:"do_settings,omitempty"`
 }
 
 // DatabaseUpdateFirewallRulesRequest is used to set the firewall rules for a database
@@ -470,6 +585,104 @@ type DatabaseFirewallRule struct {
 	Type        string    `json:"type"`
 	Value       string    `json:"value"`
 	CreatedAt   time.Time `json:"created_at"`
+}
+
+// DatabaseStartOnlineMigrationRequest is used to start an online migration for a database cluster
+type DatabaseStartOnlineMigrationRequest struct {
+	Source     *DatabaseOnlineMigrationConfig `json:"source"`
+	DisableSSL bool                           `json:"disable_ssl,omitempty"`
+	IgnoreDBs  []string                       `json:"ignore_dbs,omitempty"`
+}
+
+// DatabaseCreateLogsinkRequest is used to create logsink for a database cluster
+type DatabaseCreateLogsinkRequest struct {
+	Name   string                 `json:"sink_name"`
+	Type   string                 `json:"sink_type"`
+	Config *DatabaseLogsinkConfig `json:"config"`
+}
+
+// MarshalJSON implements custom JSON marshaling for DatabaseCreateLogsinkRequest
+// to ensure the TLS field is always included for rsyslog sink types
+func (r DatabaseCreateLogsinkRequest) MarshalJSON() ([]byte, error) {
+	// For rsyslog, we need to ensure TLS field is always present
+	if r.Type == "rsyslog" {
+		type rsyslogConfig struct {
+			URL          string  `json:"url,omitempty"`
+			IndexPrefix  string  `json:"index_prefix,omitempty"`
+			IndexDaysMax int     `json:"index_days_max,omitempty"`
+			Timeout      float32 `json:"timeout,omitempty"`
+			Server       string  `json:"server,omitempty"`
+			Port         int     `json:"port,omitempty"`
+			TLS          bool    `json:"tls"` // Always include for rsyslog
+			Format       string  `json:"format,omitempty"`
+			Logline      string  `json:"logline,omitempty"`
+			SD           string  `json:"sd,omitempty"`
+			CA           string  `json:"ca,omitempty"`
+			Key          string  `json:"key,omitempty"`
+			Cert         string  `json:"cert,omitempty"`
+		}
+
+		// Create wrapper struct with rsyslog-specific config
+		wrapper := struct {
+			Name   string         `json:"sink_name"`
+			Type   string         `json:"sink_type"`
+			Config *rsyslogConfig `json:"config"`
+		}{
+			Name: r.Name,
+			Type: r.Type,
+			Config: &rsyslogConfig{
+				URL:          r.Config.URL,
+				IndexPrefix:  r.Config.IndexPrefix,
+				IndexDaysMax: r.Config.IndexDaysMax,
+				Timeout:      r.Config.Timeout,
+				Server:       r.Config.Server,
+				Port:         r.Config.Port,
+				TLS:          r.Config.TLS,
+				Format:       r.Config.Format,
+				Logline:      r.Config.Logline,
+				SD:           r.Config.SD,
+				CA:           r.Config.CA,
+				Key:          r.Config.Key,
+				Cert:         r.Config.Cert,
+			},
+		}
+		return json.Marshal(wrapper)
+	}
+
+	// For other sink types, use default marshaling
+	type alias DatabaseCreateLogsinkRequest
+	return json.Marshal(alias(r))
+}
+
+// DatabaseUpdateLogsinkRequest is used to update logsink for a database cluster
+type DatabaseUpdateLogsinkRequest struct {
+	Config *DatabaseLogsinkConfig `json:"config"`
+}
+
+// DatabaseLogsinkConfig represents one of the configurable options (rsyslog_logsink, elasticsearch_logsink, or opensearch_logsink) for a logsink.
+type DatabaseLogsinkConfig struct {
+	URL          string  `json:"url,omitempty"`
+	IndexPrefix  string  `json:"index_prefix,omitempty"`
+	IndexDaysMax int     `json:"index_days_max,omitempty"`
+	Timeout      float32 `json:"timeout,omitempty"`
+	Server       string  `json:"server,omitempty"`
+	Port         int     `json:"port,omitempty"`
+	TLS          bool    `json:"tls,omitempty"`
+	Format       string  `json:"format,omitempty"`
+	Logline      string  `json:"logline,omitempty"`
+	SD           string  `json:"sd,omitempty"`
+	CA           string  `json:"ca,omitempty"`
+	Key          string  `json:"key,omitempty"`
+	Cert         string  `json:"cert,omitempty"`
+}
+
+// DatabaseOnlineMigrationConfig represents the configuration options for database online migrations.
+type DatabaseOnlineMigrationConfig struct {
+	Host         string `json:"host,omitempty"`
+	Port         int    `json:"port,omitempty"`
+	DatabaseName string `json:"dbname,omitempty"`
+	Username     string `json:"username,omitempty"`
+	Password     string `json:"password,omitempty"`
 }
 
 // PostgreSQLConfig holds advanced configurations for PostgreSQL database clusters.
@@ -525,6 +738,47 @@ type PostgreSQLConfig struct {
 	BackupMinute                    *int                         `json:"backup_minute,omitempty"`
 	WorkMem                         *int                         `json:"work_mem,omitempty"`
 	TimeScaleDB                     *PostgreSQLTimeScaleDBConfig `json:"timescaledb,omitempty"`
+	SynchronousReplication          *string                      `json:"synchronous_replication,omitempty"`
+	StatMonitorEnable               *bool                        `json:"stat_monitor_enable,omitempty"`
+	MaxFailoverReplicationTimeLag   *int64                       `json:"max_failover_replication_time_lag,omitempty"`
+}
+
+// AdvancedPostgresPGParameter is one GUC parameter returned by GET /config for advanced_pg clusters.
+type AdvancedPostgresPGParameter struct {
+	Name            string `json:"name,omitempty"`
+	Value           string `json:"value,omitempty"`
+	Description     string `json:"description,omitempty"`
+	RequiresRestart bool   `json:"requires_restart,omitempty"`
+	DefaultValue    string `json:"default_value,omitempty"`
+}
+
+// AdvancedPostgresConfig holds advanced configurations for advanced_pg database clusters.
+type AdvancedPostgresConfig struct {
+	PGParameters []AdvancedPostgresPGParameter `json:"pg_parameters,omitempty"`
+}
+
+// AdvancedPostgresConfigUpdate is the PATCH payload for advanced_pg database clusters.
+type AdvancedPostgresConfigUpdate struct {
+	PGParameters map[string]string `json:"pg_parameters,omitempty"`
+}
+
+// AdvancedMySQLParameter is one system variable returned by GET /config for advanced_mysql clusters.
+type AdvancedMySQLParameter struct {
+	Name            string `json:"name,omitempty"`
+	Value           string `json:"value,omitempty"`
+	Description     string `json:"description,omitempty"`
+	RequiresRestart bool   `json:"requires_restart,omitempty"`
+	DefaultValue    string `json:"default_value,omitempty"`
+}
+
+// AdvancedMySQLConfig holds advanced configurations for advanced_mysql database clusters.
+type AdvancedMySQLConfig struct {
+	MySQLParameters []AdvancedMySQLParameter `json:"mysql_parameters,omitempty"`
+}
+
+// AdvancedMySQLConfigUpdate is the PATCH payload for advanced_mysql database clusters.
+type AdvancedMySQLConfigUpdate struct {
+	MySQLParameters map[string]string `json:"mysql_parameters,omitempty"`
 }
 
 // PostgreSQLBouncerConfig configuration
@@ -560,6 +814,23 @@ type RedisConfig struct {
 	RedisACLChannelsDefault            *string `json:"redis_acl_channels_default,omitempty"`
 }
 
+// ValkeyConfig holds advanced configurations for Valkey database clusters.
+type ValkeyConfig struct {
+	ValkeyMaxmemoryPolicy               *string `json:"valkey_maxmemory_policy,omitempty"`
+	ValkeyIOThreads                     *int    `json:"valkey_io_threads,omitempty"`
+	ValkeyLFULogFactor                  *int    `json:"valkey_lfu_log_factor,omitempty"`
+	ValkeyLFUDecayTime                  *int    `json:"valkey_lfu_decay_time,omitempty"`
+	ValkeySSL                           *bool   `json:"valkey_ssl,omitempty"`
+	ValkeyTimeout                       *int    `json:"valkey_timeout,omitempty"`
+	ValkeyNotifyKeyspaceEvents          *string `json:"valkey_notify_keyspace_events,omitempty"`
+	ValkeyPersistence                   *string `json:"valkey_persistence,omitempty"`
+	ValkeyACLChannelsDefault            *string `json:"valkey_acl_channels_default,omitempty"`
+	FrequentSnapshots                   *bool   `json:"frequent_snapshots,omitempty"`
+	ValkeyActiveExpireEffort            *int    `json:"valkey_active_expire_effort,omitempty"`
+	ValkeyPubSubClientOutputBufferLimit *int    `json:"valkey_pubsub_client_output_buffer_limit,omitempty"`
+	ValkeyNumberOfDatabases             *int    `json:"valkey_number_of_databases,omitempty"`
+}
+
 // MySQLConfig holds advanced configurations for MySQL database clusters.
 type MySQLConfig struct {
 	ConnectTimeout               *int     `json:"connect_timeout,omitempty"`
@@ -589,6 +860,85 @@ type MySQLConfig struct {
 	BackupHour                   *int     `json:"backup_hour,omitempty"`
 	BackupMinute                 *int     `json:"backup_minute,omitempty"`
 	BinlogRetentionPeriod        *int     `json:"binlog_retention_period,omitempty"`
+	InnodbChangeBufferMaxSize    *int     `json:"innodb_change_buffer_max_size,omitempty"`
+	InnodbFlushNeighbors         *int     `json:"innodb_flush_neighbors,omitempty"`
+	InnodbReadIoThreads          *int     `json:"innodb_read_io_threads,omitempty"`
+	InnodbThreadConcurrency      *int     `json:"innodb_thread_concurrency,omitempty"`
+	InnodbWriteIoThreads         *int     `json:"innodb_write_io_threads,omitempty"`
+	NetBufferLength              *int     `json:"net_buffer_length,omitempty"`
+	LogOutput                    *string  `json:"log_output,omitempty"`
+}
+
+// MongoDBConfig holds advanced configurations for MongoDB database clusters.
+type MongoDBConfig struct {
+	DefaultReadConcern              *string `json:"default_read_concern,omitempty"`
+	DefaultWriteConcern             *string `json:"default_write_concern,omitempty"`
+	TransactionLifetimeLimitSeconds *int    `json:"transaction_lifetime_limit_seconds,omitempty"`
+	SlowOpThresholdMs               *int    `json:"slow_op_threshold_ms,omitempty"`
+	Verbosity                       *int    `json:"verbosity,omitempty"`
+}
+
+// KafkaConfig holds advanced configurations for Kafka database clusters.
+type KafkaConfig struct {
+	GroupInitialRebalanceDelayMs       *int     `json:"group_initial_rebalance_delay_ms,omitempty"`
+	GroupMinSessionTimeoutMs           *int     `json:"group_min_session_timeout_ms,omitempty"`
+	GroupMaxSessionTimeoutMs           *int     `json:"group_max_session_timeout_ms,omitempty"`
+	MessageMaxBytes                    *int     `json:"message_max_bytes,omitempty"`
+	LogCleanerDeleteRetentionMs        *int64   `json:"log_cleaner_delete_retention_ms,omitempty"`
+	LogCleanerMinCompactionLagMs       *uint64  `json:"log_cleaner_min_compaction_lag_ms,omitempty"`
+	LogFlushIntervalMs                 *uint64  `json:"log_flush_interval_ms,omitempty"`
+	LogIndexIntervalBytes              *int     `json:"log_index_interval_bytes,omitempty"`
+	LogMessageDownconversionEnable     *bool    `json:"log_message_downconversion_enable,omitempty"`
+	LogMessageTimestampDifferenceMaxMs *uint64  `json:"log_message_timestamp_difference_max_ms,omitempty"`
+	LogPreallocate                     *bool    `json:"log_preallocate,omitempty"`
+	LogRetentionBytes                  *big.Int `json:"log_retention_bytes,omitempty"`
+	LogRetentionHours                  *int     `json:"log_retention_hours,omitempty"`
+	LogRetentionMs                     *big.Int `json:"log_retention_ms,omitempty"`
+	LogRollJitterMs                    *uint64  `json:"log_roll_jitter_ms,omitempty"`
+	LogSegmentDeleteDelayMs            *int     `json:"log_segment_delete_delay_ms,omitempty"`
+	AutoCreateTopicsEnable             *bool    `json:"auto_create_topics_enable,omitempty"`
+}
+
+// OpensearchConfig holds advanced configurations for Opensearch database clusters.
+type OpensearchConfig struct {
+	HttpMaxContentLengthBytes                        *int     `json:"http_max_content_length_bytes,omitempty"`
+	HttpMaxHeaderSizeBytes                           *int     `json:"http_max_header_size_bytes,omitempty"`
+	HttpMaxInitialLineLengthBytes                    *int     `json:"http_max_initial_line_length_bytes,omitempty"`
+	IndicesQueryBoolMaxClauseCount                   *int     `json:"indices_query_bool_max_clause_count,omitempty"`
+	IndicesFielddataCacheSizePercentage              *int     `json:"indices_fielddata_cache_size_percentage,omitempty"`
+	IndicesMemoryIndexBufferSizePercentage           *int     `json:"indices_memory_index_buffer_size_percentage,omitempty"`
+	IndicesMemoryMinIndexBufferSizeMb                *int     `json:"indices_memory_min_index_buffer_size_mb,omitempty"`
+	IndicesMemoryMaxIndexBufferSizeMb                *int     `json:"indices_memory_max_index_buffer_size_mb,omitempty"`
+	IndicesQueriesCacheSizePercentage                *int     `json:"indices_queries_cache_size_percentage,omitempty"`
+	IndicesRecoveryMaxMbPerSec                       *int     `json:"indices_recovery_max_mb_per_sec,omitempty"`
+	IndicesRecoveryMaxConcurrentFileChunks           *int     `json:"indices_recovery_max_concurrent_file_chunks,omitempty"`
+	ThreadPoolSearchSize                             *int     `json:"thread_pool_search_size,omitempty"`
+	ThreadPoolSearchThrottledSize                    *int     `json:"thread_pool_search_throttled_size,omitempty"`
+	ThreadPoolGetSize                                *int     `json:"thread_pool_get_size,omitempty"`
+	ThreadPoolAnalyzeSize                            *int     `json:"thread_pool_analyze_size,omitempty"`
+	ThreadPoolWriteSize                              *int     `json:"thread_pool_write_size,omitempty"`
+	ThreadPoolForceMergeSize                         *int     `json:"thread_pool_force_merge_size,omitempty"`
+	ThreadPoolSearchQueueSize                        *int     `json:"thread_pool_search_queue_size,omitempty"`
+	ThreadPoolSearchThrottledQueueSize               *int     `json:"thread_pool_search_throttled_queue_size,omitempty"`
+	ThreadPoolGetQueueSize                           *int     `json:"thread_pool_get_queue_size,omitempty"`
+	ThreadPoolAnalyzeQueueSize                       *int     `json:"thread_pool_analyze_queue_size,omitempty"`
+	ThreadPoolWriteQueueSize                         *int     `json:"thread_pool_write_queue_size,omitempty"`
+	IsmEnabled                                       *bool    `json:"ism_enabled,omitempty"`
+	IsmHistoryEnabled                                *bool    `json:"ism_history_enabled,omitempty"`
+	IsmHistoryMaxAgeHours                            *int     `json:"ism_history_max_age_hours,omitempty"`
+	IsmHistoryMaxDocs                                *int64   `json:"ism_history_max_docs,omitempty"`
+	IsmHistoryRolloverCheckPeriodHours               *int     `json:"ism_history_rollover_check_period_hours,omitempty"`
+	IsmHistoryRolloverRetentionPeriodDays            *int     `json:"ism_history_rollover_retention_period_days,omitempty"`
+	SearchMaxBuckets                                 *int     `json:"search_max_buckets,omitempty"`
+	ActionAutoCreateIndexEnabled                     *bool    `json:"action_auto_create_index_enabled,omitempty"`
+	EnableSecurityAudit                              *bool    `json:"enable_security_audit,omitempty"`
+	ActionDestructiveRequiresName                    *bool    `json:"action_destructive_requires_name,omitempty"`
+	ClusterMaxShardsPerNode                          *int     `json:"cluster_max_shards_per_node,omitempty"`
+	OverrideMainResponseVersion                      *bool    `json:"override_main_response_version,omitempty"`
+	ScriptMaxCompilationsRate                        *string  `json:"script_max_compilations_rate,omitempty"`
+	ClusterRoutingAllocationNodeConcurrentRecoveries *int     `json:"cluster_routing_allocation_node_concurrent_recoveries,omitempty"`
+	ReindexRemoteWhitelist                           []string `json:"reindex_remote_whitelist,omitempty"`
+	PluginsAlertingFilterByBackendRolesEnabled       *bool    `json:"plugins_alerting_filter_by_backend_roles_enabled,omitempty"`
 }
 
 type databaseUserRoot struct {
@@ -627,8 +977,40 @@ type databaseRedisConfigRoot struct {
 	Config *RedisConfig `json:"config"`
 }
 
+type databaseValkeyConfigRoot struct {
+	Config *ValkeyConfig `json:"config"`
+}
+
 type databaseMySQLConfigRoot struct {
 	Config *MySQLConfig `json:"config"`
+}
+
+type databaseMongoDBConfigRoot struct {
+	Config *MongoDBConfig `json:"config"`
+}
+
+type databaseOpensearchConfigRoot struct {
+	Config *OpensearchConfig `json:"config"`
+}
+
+type databaseKafkaConfigRoot struct {
+	Config *KafkaConfig `json:"config"`
+}
+
+type databaseAdvancedPostgresConfigRoot struct {
+	Config *AdvancedPostgresConfig `json:"config"`
+}
+
+type databaseAdvancedPostgresConfigUpdateRoot struct {
+	Config *AdvancedPostgresConfigUpdate `json:"config"`
+}
+
+type databaseAdvancedMySQLConfigRoot struct {
+	Config *AdvancedMySQLConfig `json:"config"`
+}
+
+type databaseAdvancedMySQLConfigUpdateRoot struct {
+	Config *AdvancedMySQLConfigUpdate `json:"config"`
 }
 
 type databaseBackupsRoot struct {
@@ -649,6 +1031,10 @@ type databaseReplicaRoot struct {
 
 type databaseReplicasRoot struct {
 	Replicas []DatabaseReplica `json:"replicas"`
+}
+
+type databaseStorageAutoscaleRoot struct {
+	StorageAutoscale *DatabaseStorageAutoscale `json:"storage"`
 }
 
 type evictionPolicyRoot struct {
@@ -680,6 +1066,14 @@ type databaseTopicsRoot struct {
 	Topics []DatabaseTopic `json:"topics"`
 }
 
+type databaseLogsinksRoot struct {
+	Sinks []DatabaseLogsink `json:"sinks"`
+}
+
+type databaseLogsinkRoot struct {
+	Sink *DatabaseLogsink `json:"sink"`
+}
+
 type databaseMetricsCredentialsRoot struct {
 	Credentials *DatabaseMetricsCredentials `json:"credentials"`
 }
@@ -695,12 +1089,15 @@ type DatabaseUpdateMetricsCredentialsRequest struct {
 
 // DatabaseOptions represents the available database engines
 type DatabaseOptions struct {
-	MongoDBOptions     DatabaseEngineOptions `json:"mongodb"`
-	MySQLOptions       DatabaseEngineOptions `json:"mysql"`
-	PostgresSQLOptions DatabaseEngineOptions `json:"pg"`
-	RedisOptions       DatabaseEngineOptions `json:"redis"`
-	KafkaOptions       DatabaseEngineOptions `json:"kafka"`
-	OpensearchOptions  DatabaseEngineOptions `json:"opensearch"`
+	MongoDBOptions             DatabaseEngineOptions `json:"mongodb"`
+	MySQLOptions               DatabaseEngineOptions `json:"mysql"`
+	PostgresSQLOptions         DatabaseEngineOptions `json:"pg"`
+	RedisOptions               DatabaseEngineOptions `json:"redis"`
+	ValkeyOptions              DatabaseEngineOptions `json:"valkey"`
+	KafkaOptions               DatabaseEngineOptions `json:"kafka"`
+	OpensearchOptions          DatabaseEngineOptions `json:"opensearch"`
+	AdvancedMySQLOptions       DatabaseEngineOptions `json:"advanced_mysql"`
+	AdvancedPostgresSQLOptions DatabaseEngineOptions `json:"advanced_pg"`
 }
 
 // DatabaseEngineOptions represents the configuration options that are available for a given database engine
@@ -731,6 +1128,54 @@ type DatabaseEvent struct {
 
 type ListDatabaseEventsRoot struct {
 	Events []DatabaseEvent `json:"events"`
+}
+
+type DatabaseIndex struct {
+	IndexName        string            `json:"index_name"`
+	NumberofShards   uint64            `json:"number_of_shards"`
+	NumberofReplicas uint64            `json:"number_of_replicas"`
+	Size             int64             `json:"size,omitempty"`
+	Health           string            `json:"health,omitempty"`
+	Status           string            `json:"status,omitempty"`
+	Docs             int64             `json:"docs,omitempty"`
+	CreateTime       string            `json:"create_time"`
+	Replication      *IndexReplication `json:"replication,omitempty"`
+}
+
+type IndexReplication struct {
+	LeaderIndex   string `json:"leader_index,omitempty"`
+	LeaderProject string `json:"leader_project,omitempty"`
+	LeaderService string `json:"leader_service,omitempty"`
+}
+
+type databaseIndexesRoot struct {
+	Indexes []DatabaseIndex `json:"indexes"`
+}
+
+type DatabaseKafkaSchemaRegistrySubject struct {
+	SubjectName string `json:"subject_name"`
+	SchemaType  string `json:"schema_type"`
+	Schema      string `json:"schema"`
+	SchemaID    int    `json:"schema_id"`
+}
+
+type ListDatabaseKafkaSchemaRegistrySubjectsRoot struct {
+	Subjects []DatabaseKafkaSchemaRegistrySubject `json:"subjects"`
+}
+
+type DatabaseKafkaSchemaRegistryRequest struct {
+	SubjectName string `json:"subject_name"`
+	SchemaType  string `json:"schema_type"`
+	Schema      string `json:"schema"`
+}
+
+type DatabaseKafkaSchemaRegistryConfig struct {
+	CompatibilityLevel string `json:"compatibility_level"`
+}
+
+type DatabaseKafkaSchemaRegistrySubjectConfigResponse struct {
+	SubjectName        string `json:"subject_name"`
+	CompatibilityLevel string `json:"compatibility_level"`
 }
 
 // URN returns a URN identifier for the database
@@ -849,6 +1294,52 @@ func (svc *DatabasesServiceOp) Migrate(ctx context.Context, databaseID string, m
 func (svc *DatabasesServiceOp) UpdateMaintenance(ctx context.Context, databaseID string, maintenance *DatabaseUpdateMaintenanceRequest) (*Response, error) {
 	path := fmt.Sprintf(databaseMaintenancePath, databaseID)
 	req, err := svc.client.NewRequest(ctx, http.MethodPut, path, maintenance)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := svc.client.Do(ctx, req, nil)
+	if err != nil {
+		return resp, err
+	}
+	return resp, nil
+}
+
+// GetStorageAutoscale retrieves the storage autoscaling configuration for a database cluster.
+func (svc *DatabasesServiceOp) GetStorageAutoscale(ctx context.Context, databaseID string) (*DatabaseStorageAutoscale, *Response, error) {
+	path := fmt.Sprintf(databaseStorageAutoscalePath, databaseID)
+	req, err := svc.client.NewRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	root := new(databaseStorageAutoscaleRoot)
+	resp, err := svc.client.Do(ctx, req, root)
+	if err != nil {
+		return nil, resp, err
+	}
+	return root.StorageAutoscale, resp, nil
+}
+
+// UpdateStorageAutoscale updates the storage autoscaling configuration on a cluster
+func (svc *DatabasesServiceOp) UpdateStorageAutoscale(ctx context.Context, databaseID string, autoscale *DatabaseStorageAutoscale) (*Response, error) {
+	path := fmt.Sprintf(databaseStorageAutoscalePath, databaseID)
+	root := &databaseStorageAutoscaleRoot{
+		StorageAutoscale: autoscale,
+	}
+	req, err := svc.client.NewRequest(ctx, http.MethodPut, path, root)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := svc.client.Do(ctx, req, nil)
+	if err != nil {
+		return resp, err
+	}
+	return resp, nil
+}
+
+// InstallUpdate starts installation of updates
+func (svc *DatabasesServiceOp) InstallUpdate(ctx context.Context, databaseID string) (*Response, error) {
+	path := fmt.Sprintf(databaseUpdateInstallationPath, databaseID)
+	req, err := svc.client.NewRequest(ctx, http.MethodPut, path, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1295,6 +1786,31 @@ func (svc *DatabasesServiceOp) UpdateFirewallRules(ctx context.Context, database
 	return svc.client.Do(ctx, req, nil)
 }
 
+// GetDOSettings retrieves the DigitalOcean-specific settings for a given cluster.
+func (svc *DatabasesServiceOp) GetDOSettings(ctx context.Context, databaseID string) (*DOSettings, *Response, error) {
+	path := fmt.Sprintf(databaseDOSettingsPath, databaseID)
+	root := new(doSettingsRoot)
+	req, err := svc.client.NewRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	resp, err := svc.client.Do(ctx, req, root)
+	if err != nil {
+		return nil, resp, err
+	}
+	return root.DOSettings, resp, nil
+}
+
+// UpdateDOSettings updates the DigitalOcean-specific settings for a given cluster.
+func (svc *DatabasesServiceOp) UpdateDOSettings(ctx context.Context, databaseID string, updateReq *DatabaseUpdateDOSettingsRequest) (*Response, error) {
+	path := fmt.Sprintf(databaseDOSettingsPath, databaseID)
+	req, err := svc.client.NewRequest(ctx, http.MethodPut, path, updateReq)
+	if err != nil {
+		return nil, err
+	}
+	return svc.client.Do(ctx, req, nil)
+}
+
 // GetPostgreSQLConfig retrieves the config for a PostgreSQL database cluster.
 func (svc *DatabasesServiceOp) GetPostgreSQLConfig(ctx context.Context, databaseID string) (*PostgreSQLConfig, *Response, error) {
 	path := fmt.Sprintf(databaseConfigPath, databaseID)
@@ -1370,6 +1886,38 @@ func (svc *DatabasesServiceOp) UpdateRedisConfig(ctx context.Context, databaseID
 	return resp, nil
 }
 
+// GetValkeyConfig updates the config for a Valkey database cluster.
+func (svc *DatabasesServiceOp) GetValkeyConfig(ctx context.Context, databaseID string) (*ValkeyConfig, *Response, error) {
+	path := fmt.Sprintf(databaseConfigPath, databaseID)
+	req, err := svc.client.NewRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	root := new(databaseValkeyConfigRoot)
+	resp, err := svc.client.Do(ctx, req, root)
+	if err != nil {
+		return nil, resp, err
+	}
+	return root.Config, resp, nil
+}
+
+// UpdateValkeyConfig updates the config for a Valkey database cluster.
+func (svc *DatabasesServiceOp) UpdateValkeyConfig(ctx context.Context, databaseID string, config *ValkeyConfig) (*Response, error) {
+	path := fmt.Sprintf(databaseConfigPath, databaseID)
+	root := &databaseValkeyConfigRoot{
+		Config: config,
+	}
+	req, err := svc.client.NewRequest(ctx, http.MethodPatch, path, root)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := svc.client.Do(ctx, req, nil)
+	if err != nil {
+		return resp, err
+	}
+	return resp, nil
+}
+
 // GetMySQLConfig retrieves the config for a MySQL database cluster.
 func (svc *DatabasesServiceOp) GetMySQLConfig(ctx context.Context, databaseID string) (*MySQLConfig, *Response, error) {
 	path := fmt.Sprintf(databaseConfigPath, databaseID)
@@ -1389,6 +1937,166 @@ func (svc *DatabasesServiceOp) GetMySQLConfig(ctx context.Context, databaseID st
 func (svc *DatabasesServiceOp) UpdateMySQLConfig(ctx context.Context, databaseID string, config *MySQLConfig) (*Response, error) {
 	path := fmt.Sprintf(databaseConfigPath, databaseID)
 	root := &databaseMySQLConfigRoot{
+		Config: config,
+	}
+	req, err := svc.client.NewRequest(ctx, http.MethodPatch, path, root)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := svc.client.Do(ctx, req, nil)
+	if err != nil {
+		return resp, err
+	}
+	return resp, nil
+}
+
+// GetMongoDBConfig retrieves the config for a MongoDB database cluster.
+func (svc *DatabasesServiceOp) GetMongoDBConfig(ctx context.Context, databaseID string) (*MongoDBConfig, *Response, error) {
+	path := fmt.Sprintf(databaseConfigPath, databaseID)
+	req, err := svc.client.NewRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	root := new(databaseMongoDBConfigRoot)
+	resp, err := svc.client.Do(ctx, req, root)
+	if err != nil {
+		return nil, resp, err
+	}
+	return root.Config, resp, nil
+}
+
+// UpdateMongoDBConfig updates the config for a MongoDB database cluster.
+func (svc *DatabasesServiceOp) UpdateMongoDBConfig(ctx context.Context, databaseID string, config *MongoDBConfig) (*Response, error) {
+	path := fmt.Sprintf(databaseConfigPath, databaseID)
+	root := &databaseMongoDBConfigRoot{
+		Config: config,
+	}
+	req, err := svc.client.NewRequest(ctx, http.MethodPatch, path, root)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := svc.client.Do(ctx, req, nil)
+	if err != nil {
+		return resp, err
+	}
+	return resp, nil
+}
+
+// GetKafkaConfig retrieves the config for a Kafka database cluster.
+func (svc *DatabasesServiceOp) GetKafkaConfig(ctx context.Context, databaseID string) (*KafkaConfig, *Response, error) {
+	path := fmt.Sprintf(databaseConfigPath, databaseID)
+	req, err := svc.client.NewRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	root := new(databaseKafkaConfigRoot)
+	resp, err := svc.client.Do(ctx, req, root)
+	if err != nil {
+		return nil, resp, err
+	}
+	return root.Config, resp, nil
+}
+
+// UpdateKafkaConfig updates the config for a Kafka database cluster.
+func (svc *DatabasesServiceOp) UpdateKafkaConfig(ctx context.Context, databaseID string, config *KafkaConfig) (*Response, error) {
+	path := fmt.Sprintf(databaseConfigPath, databaseID)
+	root := &databaseKafkaConfigRoot{
+		Config: config,
+	}
+	req, err := svc.client.NewRequest(ctx, http.MethodPatch, path, root)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := svc.client.Do(ctx, req, nil)
+	if err != nil {
+		return resp, err
+	}
+	return resp, nil
+}
+
+// GetAdvancedPostgresSQLConfig retrieves the config for an advanced_pg database cluster.
+func (svc *DatabasesServiceOp) GetAdvancedPostgresSQLConfig(ctx context.Context, databaseID string) (*AdvancedPostgresConfig, *Response, error) {
+	path := fmt.Sprintf(databaseConfigPath, databaseID)
+	req, err := svc.client.NewRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	root := new(databaseAdvancedPostgresConfigRoot)
+	resp, err := svc.client.Do(ctx, req, root)
+	if err != nil {
+		return nil, resp, err
+	}
+	return root.Config, resp, nil
+}
+
+// UpdateAdvancedPostgresSQLConfig updates the config for an advanced_pg database cluster.
+func (svc *DatabasesServiceOp) UpdateAdvancedPostgresSQLConfig(ctx context.Context, databaseID string, config *AdvancedPostgresConfigUpdate) (*Response, error) {
+	path := fmt.Sprintf(databaseConfigPath, databaseID)
+	root := &databaseAdvancedPostgresConfigUpdateRoot{
+		Config: config,
+	}
+	req, err := svc.client.NewRequest(ctx, http.MethodPatch, path, root)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := svc.client.Do(ctx, req, nil)
+	if err != nil {
+		return resp, err
+	}
+	return resp, nil
+}
+
+// GetAdvancedMySQLConfig retrieves the config for an advanced_mysql database cluster.
+func (svc *DatabasesServiceOp) GetAdvancedMySQLConfig(ctx context.Context, databaseID string) (*AdvancedMySQLConfig, *Response, error) {
+	path := fmt.Sprintf(databaseConfigPath, databaseID)
+	req, err := svc.client.NewRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	root := new(databaseAdvancedMySQLConfigRoot)
+	resp, err := svc.client.Do(ctx, req, root)
+	if err != nil {
+		return nil, resp, err
+	}
+	return root.Config, resp, nil
+}
+
+// UpdateAdvancedMySQLConfig updates the config for an advanced_mysql database cluster.
+func (svc *DatabasesServiceOp) UpdateAdvancedMySQLConfig(ctx context.Context, databaseID string, config *AdvancedMySQLConfigUpdate) (*Response, error) {
+	path := fmt.Sprintf(databaseConfigPath, databaseID)
+	root := &databaseAdvancedMySQLConfigUpdateRoot{
+		Config: config,
+	}
+	req, err := svc.client.NewRequest(ctx, http.MethodPatch, path, root)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := svc.client.Do(ctx, req, nil)
+	if err != nil {
+		return resp, err
+	}
+	return resp, nil
+}
+
+// GetOpensearchConfig retrieves the config for a Opensearch database cluster.
+func (svc *DatabasesServiceOp) GetOpensearchConfig(ctx context.Context, databaseID string) (*OpensearchConfig, *Response, error) {
+	path := fmt.Sprintf(databaseConfigPath, databaseID)
+	req, err := svc.client.NewRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	root := new(databaseOpensearchConfigRoot)
+	resp, err := svc.client.Do(ctx, req, root)
+	if err != nil {
+		return nil, resp, err
+	}
+	return root.Config, resp, nil
+}
+
+// UpdateOpensearchConfig updates the config for a Opensearch database cluster.
+func (svc *DatabasesServiceOp) UpdateOpensearchConfig(ctx context.Context, databaseID string, config *OpensearchConfig) (*Response, error) {
+	path := fmt.Sprintf(databaseConfigPath, databaseID)
+	root := &databaseOpensearchConfigRoot{
 		Config: config,
 	}
 	req, err := svc.client.NewRequest(ctx, http.MethodPatch, path, root)
@@ -1559,4 +2267,295 @@ func (svc *DatabasesServiceOp) ListDatabaseEvents(ctx context.Context, databaseI
 	}
 
 	return root.Events, resp, nil
+}
+
+// ListIndexes returns all indexes for a given opensearch cluster
+func (svc *DatabasesServiceOp) ListIndexes(ctx context.Context, databaseID string, opts *ListOptions) ([]DatabaseIndex, *Response, error) {
+	path := fmt.Sprintf(databaseIndexesPath, databaseID)
+	path, err := addOptions(path, opts)
+	if err != nil {
+		return nil, nil, err
+	}
+	req, err := svc.client.NewRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	root := new(databaseIndexesRoot)
+	resp, err := svc.client.Do(ctx, req, root)
+	if err != nil {
+		return nil, resp, err
+	}
+	return root.Indexes, resp, nil
+}
+
+// DeleteIndex will delete an existing opensearch index
+func (svc *DatabasesServiceOp) DeleteIndex(ctx context.Context, databaseID, name string) (*Response, error) {
+	path := fmt.Sprintf(databaseIndexPath, databaseID, name)
+	req, err := svc.client.NewRequest(ctx, http.MethodDelete, path, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := svc.client.Do(ctx, req, nil)
+	if err != nil {
+		return resp, err
+	}
+	return resp, nil
+}
+
+// CreateLogsink creates a new logsink for a database
+func (svc *DatabasesServiceOp) CreateLogsink(ctx context.Context, databaseID string, createLogsink *DatabaseCreateLogsinkRequest) (*DatabaseLogsink, *Response, error) {
+	path := fmt.Sprintf(databaseLogsinksPath, databaseID)
+	req, err := svc.client.NewRequest(ctx, http.MethodPost, path, createLogsink)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	root := new(databaseLogsinkRoot)
+	resp, err := svc.client.Do(ctx, req, root)
+	if err != nil {
+		return nil, resp, err
+	}
+	return root.Sink, resp, nil
+}
+
+// GetLogsink gets a logsink for a database
+func (svc *DatabasesServiceOp) GetLogsink(ctx context.Context, databaseID string, logsinkID string) (*DatabaseLogsink, *Response, error) {
+	path := fmt.Sprintf(databaseLogsinkPath, databaseID, logsinkID)
+	req, err := svc.client.NewRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	root := new(DatabaseLogsink)
+	resp, err := svc.client.Do(ctx, req, root)
+	if err != nil {
+		return nil, resp, err
+	}
+	return root, resp, nil
+}
+
+// ListTopics returns all topics for a given kafka cluster
+func (svc *DatabasesServiceOp) ListLogsinks(ctx context.Context, databaseID string, opts *ListOptions) ([]DatabaseLogsink, *Response, error) {
+	path := fmt.Sprintf(databaseLogsinksPath, databaseID)
+	path, err := addOptions(path, opts)
+	if err != nil {
+		return nil, nil, err
+	}
+	req, err := svc.client.NewRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	root := new(databaseLogsinksRoot)
+	resp, err := svc.client.Do(ctx, req, root)
+	if err != nil {
+		return nil, resp, err
+	}
+	return root.Sinks, resp, nil
+}
+
+// UpdateLogsink updates a logsink for a database cluster
+func (svc *DatabasesServiceOp) UpdateLogsink(ctx context.Context, databaseID string, logsinkID string, updateLogsink *DatabaseUpdateLogsinkRequest) (*Response, error) {
+	path := fmt.Sprintf(databaseLogsinkPath, databaseID, logsinkID)
+	req, err := svc.client.NewRequest(ctx, http.MethodPut, path, updateLogsink)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := svc.client.Do(ctx, req, nil)
+	if err != nil {
+		return resp, err
+	}
+	return resp, nil
+}
+
+// DeleteLogsink deletes a logsink for a database cluster
+func (svc *DatabasesServiceOp) DeleteLogsink(ctx context.Context, databaseID, logsinkID string) (*Response, error) {
+	path := fmt.Sprintf(databaseLogsinkPath, databaseID, logsinkID)
+	req, err := svc.client.NewRequest(ctx, http.MethodDelete, path, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := svc.client.Do(ctx, req, nil)
+	if err != nil {
+		return resp, err
+	}
+	return resp, nil
+}
+
+// StartOnlineMigration starts an online migration for a database. Migrating a cluster establishes a connection with an existing cluster
+// and replicates its contents to the target cluster. Online migration is only available for MySQL, PostgreSQL, Redis and Valkey clusters.
+func (svc *DatabasesServiceOp) StartOnlineMigration(ctx context.Context, databaseID string, onlineMigration *DatabaseStartOnlineMigrationRequest) (*DatabaseOnlineMigrationStatus, *Response, error) {
+	path := fmt.Sprintf(databaseOnlineMigrationsPath, databaseID)
+	req, err := svc.client.NewRequest(ctx, http.MethodPut, path, onlineMigration)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	root := new(DatabaseOnlineMigrationStatus)
+	resp, err := svc.client.Do(ctx, req, root)
+	if err != nil {
+		return nil, resp, err
+	}
+	return root, resp, nil
+}
+
+// GetOnlineMigrationStatus retrieves the status of the most recent online migration
+func (svc *DatabasesServiceOp) GetOnlineMigrationStatus(ctx context.Context, databaseID string) (*DatabaseOnlineMigrationStatus, *Response, error) {
+	path := fmt.Sprintf(databaseOnlineMigrationsPath, databaseID)
+	req, err := svc.client.NewRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	root := new(DatabaseOnlineMigrationStatus)
+	resp, err := svc.client.Do(ctx, req, root)
+	if err != nil {
+		return nil, resp, err
+	}
+	return root, resp, nil
+}
+
+// StopOnlineMigration stops an online migration
+func (svc *DatabasesServiceOp) StopOnlineMigration(ctx context.Context, databaseID, migrationID string) (*Response, error) {
+	path := fmt.Sprintf(databaseOnlineMigrationPath, databaseID, migrationID)
+	req, err := svc.client.NewRequest(ctx, http.MethodDelete, path, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := svc.client.Do(ctx, req, nil)
+	if err != nil {
+		return resp, err
+	}
+	return resp, nil
+}
+
+// ListKafkaSchemaRegistry lists the kafka schema registry subjects
+func (svc *DatabasesServiceOp) ListKafkaSchemaRegistry(ctx context.Context, databaseID string, opts *ListOptions) ([]DatabaseKafkaSchemaRegistrySubject, *Response, error) {
+	path := fmt.Sprintf(databaseKafkaSchemaRegistryPath, databaseID)
+	path, err := addOptions(path, opts)
+	if err != nil {
+		return nil, nil, err
+	}
+	req, err := svc.client.NewRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	root := new(ListDatabaseKafkaSchemaRegistrySubjectsRoot)
+	resp, err := svc.client.Do(ctx, req, root)
+	if err != nil {
+		return nil, resp, err
+	}
+	return root.Subjects, resp, nil
+}
+
+// CreateKafkaSchemaRegistry creates a kafka schema registry subject
+func (svc *DatabasesServiceOp) CreateKafkaSchemaRegistry(ctx context.Context, databaseID string, createKafkaSchemaRegistry *DatabaseKafkaSchemaRegistryRequest) (*DatabaseKafkaSchemaRegistrySubject, *Response, error) {
+	path := fmt.Sprintf(databaseKafkaSchemaRegistryPath, databaseID)
+	req, err := svc.client.NewRequest(ctx, http.MethodPost, path, createKafkaSchemaRegistry)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	root := new(DatabaseKafkaSchemaRegistrySubject)
+	resp, err := svc.client.Do(ctx, req, root)
+	if err != nil {
+		return nil, resp, err
+	}
+	return root, resp, nil
+}
+
+// GetKafkaSchemaRegistry retrieves a kafka schema registry subject
+func (svc *DatabasesServiceOp) GetKafkaSchemaRegistry(ctx context.Context, databaseID, subjectName string) (*DatabaseKafkaSchemaRegistrySubject, *Response, error) {
+	path := fmt.Sprintf(databaseKafkaSchemaRegistrySubjectPath, databaseID, subjectName)
+	req, err := svc.client.NewRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	root := new(DatabaseKafkaSchemaRegistrySubject)
+	resp, err := svc.client.Do(ctx, req, root)
+	if err != nil {
+		return nil, resp, err
+	}
+	return root, resp, nil
+}
+
+// DeleteKafkaSchemaRegistry deletes a kafka schema registry subject
+func (svc *DatabasesServiceOp) DeleteKafkaSchemaRegistry(ctx context.Context, databaseID, subjectName string) (*Response, error) {
+	path := fmt.Sprintf(databaseKafkaSchemaRegistrySubjectPath, databaseID, subjectName)
+	req, err := svc.client.NewRequest(ctx, http.MethodDelete, path, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := svc.client.Do(ctx, req, nil)
+	if err != nil {
+		return resp, err
+	}
+	return resp, nil
+}
+
+// UpdateKafkaSchemaRegistryConfig updates the configuration for a kafka schema registry
+func (svc *DatabasesServiceOp) UpdateKafkaSchemaRegistryConfig(ctx context.Context, databaseID string, updateKafkaSchemaRegistryConfig *DatabaseKafkaSchemaRegistryConfig) (*DatabaseKafkaSchemaRegistryConfig, *Response, error) {
+	path := fmt.Sprintf(databaseKafkaSchemaRegistryConfigPath, databaseID)
+	req, err := svc.client.NewRequest(ctx, http.MethodPut, path, updateKafkaSchemaRegistryConfig)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	root := new(DatabaseKafkaSchemaRegistryConfig)
+	resp, err := svc.client.Do(ctx, req, root)
+	if err != nil {
+		return nil, resp, err
+	}
+	return root, resp, nil
+}
+
+// GetKafkaSchemaRegistryConfig retrieves the configuration for a kafka schema registry
+func (svc *DatabasesServiceOp) GetKafkaSchemaRegistryConfig(ctx context.Context, databaseID string) (*DatabaseKafkaSchemaRegistryConfig, *Response, error) {
+	path := fmt.Sprintf(databaseKafkaSchemaRegistryConfigPath, databaseID)
+	req, err := svc.client.NewRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	root := new(DatabaseKafkaSchemaRegistryConfig)
+	resp, err := svc.client.Do(ctx, req, root)
+	if err != nil {
+		return nil, resp, err
+	}
+	return root, resp, nil
+}
+
+// UpdateKafkaSchemaRegistrySubjectConfig updates the configuration for a kafka schema registry subject
+func (svc *DatabasesServiceOp) UpdateKafkaSchemaRegistrySubjectConfig(ctx context.Context, databaseID, subject string, updateKafkaSchemaRegistrySubjectConfig *DatabaseKafkaSchemaRegistryConfig) (*DatabaseKafkaSchemaRegistrySubjectConfigResponse, *Response, error) {
+	path := fmt.Sprintf(databaseKafkaSchemaRegistrySubjectConfigPath, databaseID, subject)
+	req, err := svc.client.NewRequest(ctx, http.MethodPut, path, updateKafkaSchemaRegistrySubjectConfig)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	root := new(DatabaseKafkaSchemaRegistrySubjectConfigResponse)
+	resp, err := svc.client.Do(ctx, req, root)
+	if err != nil {
+		return nil, resp, err
+	}
+	return root, resp, nil
+}
+
+// GetKafkaSchemaRegistrySubjectConfig retrieves the configuration for a kafka schema registry subject
+func (svc *DatabasesServiceOp) GetKafkaSchemaRegistrySubjectConfig(ctx context.Context, databaseID, subject string) (*DatabaseKafkaSchemaRegistrySubjectConfigResponse, *Response, error) {
+	path := fmt.Sprintf(databaseKafkaSchemaRegistrySubjectConfigPath, databaseID, subject)
+	req, err := svc.client.NewRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	root := new(DatabaseKafkaSchemaRegistrySubjectConfigResponse)
+	resp, err := svc.client.Do(ctx, req, root)
+	if err != nil {
+		return nil, resp, err
+	}
+	return root, resp, nil
 }

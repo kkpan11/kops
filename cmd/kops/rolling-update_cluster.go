@@ -30,7 +30,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/kops/cmd/kops/util"
@@ -38,6 +37,7 @@ import (
 	"k8s.io/kops/pkg/cloudinstances"
 	"k8s.io/kops/pkg/commands/commandutils"
 	"k8s.io/kops/pkg/instancegroups"
+	"k8s.io/kops/pkg/kubeconfig"
 	"k8s.io/kops/pkg/pretty"
 	"k8s.io/kops/pkg/validation"
 	"k8s.io/kops/upup/pkg/fi/cloudup"
@@ -146,6 +146,8 @@ type RollingUpdateOptions struct {
 
 	// TODO: Move more/all above options to RollingUpdateOptions
 	instancegroups.RollingUpdateOptions
+
+	kubeconfig.CreateKubecfgOptions
 }
 
 func (o *RollingUpdateOptions) InitDefaults() {
@@ -165,6 +167,8 @@ func (o *RollingUpdateOptions) InitDefaults() {
 	o.ValidateCount = 2
 
 	o.DrainTimeout = 15 * time.Minute
+
+	o.Admin = kubeconfig.DefaultKubecfgAdminLifetime
 
 	o.RollingUpdateOptions.InitDefaults()
 }
@@ -194,6 +198,7 @@ func NewCmdRollingUpdateCluster(f *util.Factory, out io.Writer) *cobra.Command {
 	cmd.Flags().BoolVar(&options.Force, "force", options.Force, "Force rolling update, even if no changes")
 	cmd.Flags().BoolVar(&options.CloudOnly, "cloudonly", options.CloudOnly, "Perform rolling update without validating cluster status (will cause downtime)")
 
+	cmd.Flags().DurationVar(&options.Admin, "admin", options.Admin, "a cluster admin user credential with the specified lifetime")
 	cmd.Flags().DurationVar(&options.ValidationTimeout, "validation-timeout", options.ValidationTimeout, "Maximum time to wait for a cluster to validate")
 	cmd.Flags().DurationVar(&options.DrainTimeout, "drain-timeout", options.DrainTimeout, "Maximum time to wait for a node to drain")
 	cmd.Flags().Int32Var(&options.ValidateCount, "validate-count", options.ValidateCount, "Number of times that a cluster needs to be validated after single node update")
@@ -213,6 +218,8 @@ func NewCmdRollingUpdateCluster(f *util.Factory, out io.Writer) *cobra.Command {
 
 	cmd.Flags().BoolVar(&options.FailOnDrainError, "fail-on-drain-error", true, "Fail if draining a node fails")
 	cmd.Flags().BoolVar(&options.FailOnValidate, "fail-on-validate-error", true, "Fail if the cluster fails to validate")
+
+	options.CreateKubecfgOptions.AddCommonFlags(cmd.Flags())
 
 	cmd.Flags().SetNormalizeFunc(func(f *pflag.FlagSet, name string) pflag.NormalizedName {
 		switch name {
@@ -238,21 +245,22 @@ func RunRollingUpdateCluster(ctx context.Context, f *util.Factory, out io.Writer
 		return err
 	}
 
-	contextName := cluster.ObjectMeta.Name
-	clientGetter := genericclioptions.NewConfigFlags(true)
-	clientGetter.Context = &contextName
-
-	config, err := clientGetter.ToRESTConfig()
-	if err != nil {
-		return fmt.Errorf("cannot load kubecfg settings for %q: %v", contextName, err)
-	}
-
 	var nodes []v1.Node
 	var k8sClient kubernetes.Interface
 	if !options.CloudOnly {
-		k8sClient, err = kubernetes.NewForConfig(config)
+		restConfig, err := f.RESTConfig(ctx, cluster, options.CreateKubecfgOptions)
 		if err != nil {
-			return fmt.Errorf("cannot build kube client for %q: %v", contextName, err)
+			return fmt.Errorf("getting rest config: %w", err)
+		}
+
+		httpClient, err := f.HTTPClient(restConfig)
+		if err != nil {
+			return fmt.Errorf("getting http client: %w", err)
+		}
+
+		k8sClient, err = kubernetes.NewForConfigAndClient(restConfig, httpClient)
+		if err != nil {
+			return fmt.Errorf("getting kubernetes client: %w", err)
 		}
 
 		nodeList, err := k8sClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
@@ -285,7 +293,6 @@ func RunRollingUpdateCluster(ctx context.Context, f *util.Factory, out io.Writer
 		countByRole[instanceGroup.Spec.Role] = countByRole[instanceGroup.Spec.Role] + minSize
 	}
 	if countByRole[kopsapi.InstanceGroupRoleAPIServer]+countByRole[kopsapi.InstanceGroupRoleControlPlane] <= 1 {
-		fmt.Fprintf(out, "Detected single-control-plane cluster; won't detach before draining\n")
 		options.DeregisterControlPlaneNodes = false
 	}
 
@@ -348,7 +355,6 @@ func RunRollingUpdateCluster(ctx context.Context, f *util.Factory, out io.Writer
 
 	d := &instancegroups.RollingUpdateCluster{
 		Clientset:         clientset,
-		Ctx:               ctx,
 		Cluster:           cluster,
 		MasterInterval:    options.ControlPlaneInterval,
 		NodeInterval:      options.NodeInterval,
@@ -449,14 +455,19 @@ func RunRollingUpdateCluster(ctx context.Context, f *util.Factory, out io.Writer
 
 	var clusterValidator validation.ClusterValidator
 	if !options.CloudOnly {
-		clusterValidator, err = validation.NewClusterValidator(cluster, cloud, list, config.Host, k8sClient)
+		restConfig, err := f.RESTConfig(ctx, cluster, options.CreateKubecfgOptions)
+		if err != nil {
+			return fmt.Errorf("getting rest config: %w", err)
+		}
+
+		clusterValidator, err = validation.NewClusterValidator(cluster, cloud, list, nil, nil, 0, restConfig, k8sClient)
 		if err != nil {
 			return fmt.Errorf("cannot create cluster validator: %v", err)
 		}
 	}
 	d.ClusterValidator = clusterValidator
 
-	return d.RollingUpdate(groups, list)
+	return d.RollingUpdate(ctx, groups, list)
 }
 
 func completeInstanceGroup(f commandutils.Factory, selectedInstanceGroups *[]string, selectedInstanceGroupRoles *[]string) func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {

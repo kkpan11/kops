@@ -4,13 +4,10 @@ package autoscaling
 
 import (
 	"context"
-	"fmt"
-	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/smithy-go/middleware"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
-// This API operation is superseded by AttachTrafficSources, which can attach multiple traffic sources
+// This API operation is superseded by [AttachTrafficSources], which can attach multiple traffic sources
 // types. We recommend using AttachTrafficSources to simplify how you manage
 // traffic sources. However, we continue to support AttachLoadBalancerTargetGroups
 // . You can use both the original AttachLoadBalancerTargetGroups API operation
@@ -28,14 +25,17 @@ import (
 //
 //   - Gateway Load Balancer - Operates at the network layer (layer 3).
 //
-// To describe the target groups for an Auto Scaling group, call the DescribeLoadBalancerTargetGroups API. To
-// detach the target group from the Auto Scaling group, call the DetachLoadBalancerTargetGroupsAPI.
+// To describe the target groups for an Auto Scaling group, call the [DescribeLoadBalancerTargetGroups] API. To
+// detach the target group from the Auto Scaling group, call the [DetachLoadBalancerTargetGroups]API.
 //
 // This operation is additive and does not detach existing target groups or
 // Classic Load Balancers from the Auto Scaling group.
 //
 // For more information, see [Use Elastic Load Balancing to distribute traffic across the instances in your Auto Scaling group] in the Amazon EC2 Auto Scaling User Guide.
 //
+// [DescribeLoadBalancerTargetGroups]: https://docs.aws.amazon.com/autoscaling/ec2/APIReference/API_DescribeLoadBalancerTargetGroups.html
+// [DetachLoadBalancerTargetGroups]: https://docs.aws.amazon.com/autoscaling/ec2/APIReference/API_DetachLoadBalancerTargetGroups.html
+// [AttachTrafficSources]: https://docs.aws.amazon.com/autoscaling/ec2/APIReference/API_AttachTrafficSources.html
 // [Use Elastic Load Balancing to distribute traffic across the instances in your Auto Scaling group]: https://docs.aws.amazon.com/autoscaling/ec2/userguide/autoscaling-load-balancer.html
 func (c *Client) AttachLoadBalancerTargetGroups(ctx context.Context, params *AttachLoadBalancerTargetGroupsInput, optFns ...func(*Options)) (*AttachLoadBalancerTargetGroupsOutput, error) {
 	if params == nil {
@@ -79,9 +79,6 @@ type AttachLoadBalancerTargetGroupsOutput struct {
 }
 
 func (c *Client) addOperationAttachLoadBalancerTargetGroupsMiddlewares(stack *middleware.Stack, options Options) (err error) {
-	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
-		return err
-	}
 	err = stack.Serialize.Add(&awsAwsquery_serializeOpAttachLoadBalancerTargetGroups{}, middleware.After)
 	if err != nil {
 		return err
@@ -90,19 +87,7 @@ func (c *Client) addOperationAttachLoadBalancerTargetGroupsMiddlewares(stack *mi
 	if err != nil {
 		return err
 	}
-	if err := addProtocolFinalizerMiddlewares(stack, options, "AttachLoadBalancerTargetGroups"); err != nil {
-		return fmt.Errorf("add protocol finalizers: %v", err)
-	}
 
-	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
-		return err
-	}
-	if err = addSetLoggerMiddleware(stack, options); err != nil {
-		return err
-	}
-	if err = addClientRequestID(stack); err != nil {
-		return err
-	}
 	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
@@ -112,40 +97,13 @@ func (c *Client) addOperationAttachLoadBalancerTargetGroupsMiddlewares(stack *mi
 	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetry(stack, options); err != nil {
+	if err = addRecordResponseTiming(stack, options); err != nil {
 		return err
 	}
-	if err = addRawResponseToMetadata(stack); err != nil {
-		return err
-	}
-	if err = addRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack, options); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addTimeOffsetBuild(stack, c); err != nil {
-		return err
-	}
-	if err = addUserAgentRetryMode(stack, options); err != nil {
+	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
 	if err = addOpAttachLoadBalancerTargetGroupsValidationMiddleware(stack); err != nil {
-		return err
-	}
-	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opAttachLoadBalancerTargetGroups(options.Region), middleware.Before); err != nil {
-		return err
-	}
-	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -160,13 +118,8 @@ func (c *Client) addOperationAttachLoadBalancerTargetGroupsMiddlewares(stack *mi
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
-	return nil
-}
-
-func newServiceMetadataMiddleware_opAttachLoadBalancerTargetGroups(region string) *awsmiddleware.RegisterServiceMetadata {
-	return &awsmiddleware.RegisterServiceMetadata{
-		Region:        region,
-		ServiceID:     ServiceID,
-		OperationName: "AttachLoadBalancerTargetGroups",
+	if err = addInterceptors(stack, options); err != nil {
+		return err
 	}
+	return nil
 }

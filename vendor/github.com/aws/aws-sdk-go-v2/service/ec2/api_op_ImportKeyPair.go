@@ -4,24 +4,18 @@ package ec2
 
 import (
 	"context"
-	"fmt"
-	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/smithy-go/middleware"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
-// Imports the public key from an RSA or ED25519 key pair that you created with a
-// third-party tool. Compare this with CreateKeyPair, in which Amazon Web Services creates the
-// key pair and gives the keys to you (Amazon Web Services keeps a copy of the
-// public key). With ImportKeyPair, you create the key pair and give Amazon Web
-// Services just the public key. The private key is never transferred between you
-// and Amazon Web Services.
+// Imports the public key from an RSA or ED25519 key pair that you created using a
+// third-party tool. You give Amazon Web Services only the public key. The private
+// key is never transferred between you and Amazon Web Services.
 //
-// For more information about key pairs, see [Amazon EC2 key pairs] in the Amazon Elastic Compute Cloud
-// User Guide.
+// For more information about the requirements for importing a key pair, see [Create a key pair and import the public key to Amazon EC2] in
+// the Amazon EC2 User Guide.
 //
-// [Amazon EC2 key pairs]: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html
+// [Create a key pair and import the public key to Amazon EC2]: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/create-key-pairs.html#how-to-generate-your-own-key-and-import-it-to-aws
 func (c *Client) ImportKeyPair(ctx context.Context, params *ImportKeyPairInput, optFns ...func(*Options)) (*ImportKeyPairOutput, error) {
 	if params == nil {
 		params = &ImportKeyPairInput{}
@@ -44,8 +38,7 @@ type ImportKeyPairInput struct {
 	// This member is required.
 	KeyName *string
 
-	// The public key. For API calls, the text must be base64-encoded. For command
-	// line tools, base64 encoding is performed for you.
+	// The public key.
 	//
 	// This member is required.
 	PublicKeyMaterial []byte
@@ -89,9 +82,6 @@ type ImportKeyPairOutput struct {
 }
 
 func (c *Client) addOperationImportKeyPairMiddlewares(stack *middleware.Stack, options Options) (err error) {
-	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
-		return err
-	}
 	err = stack.Serialize.Add(&awsEc2query_serializeOpImportKeyPair{}, middleware.After)
 	if err != nil {
 		return err
@@ -100,19 +90,7 @@ func (c *Client) addOperationImportKeyPairMiddlewares(stack *middleware.Stack, o
 	if err != nil {
 		return err
 	}
-	if err := addProtocolFinalizerMiddlewares(stack, options, "ImportKeyPair"); err != nil {
-		return fmt.Errorf("add protocol finalizers: %v", err)
-	}
 
-	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
-		return err
-	}
-	if err = addSetLoggerMiddleware(stack, options); err != nil {
-		return err
-	}
-	if err = addClientRequestID(stack); err != nil {
-		return err
-	}
 	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
@@ -122,40 +100,13 @@ func (c *Client) addOperationImportKeyPairMiddlewares(stack *middleware.Stack, o
 	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetry(stack, options); err != nil {
+	if err = addRecordResponseTiming(stack, options); err != nil {
 		return err
 	}
-	if err = addRawResponseToMetadata(stack); err != nil {
-		return err
-	}
-	if err = addRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack, options); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addTimeOffsetBuild(stack, c); err != nil {
-		return err
-	}
-	if err = addUserAgentRetryMode(stack, options); err != nil {
+	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
 	if err = addOpImportKeyPairValidationMiddleware(stack); err != nil {
-		return err
-	}
-	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opImportKeyPair(options.Region), middleware.Before); err != nil {
-		return err
-	}
-	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -170,13 +121,8 @@ func (c *Client) addOperationImportKeyPairMiddlewares(stack *middleware.Stack, o
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
-	return nil
-}
-
-func newServiceMetadataMiddleware_opImportKeyPair(region string) *awsmiddleware.RegisterServiceMetadata {
-	return &awsmiddleware.RegisterServiceMetadata{
-		Region:        region,
-		ServiceID:     ServiceID,
-		OperationName: "ImportKeyPair",
+	if err = addInterceptors(stack, options); err != nil {
+		return err
 	}
+	return nil
 }

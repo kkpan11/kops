@@ -4,28 +4,25 @@ package eventbridge
 
 import (
 	"context"
-	"fmt"
-	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	ebcust "github.com/aws/aws-sdk-go-v2/service/eventbridge/internal/customizations"
 	"github.com/aws/aws-sdk-go-v2/service/eventbridge/types"
 	"github.com/aws/smithy-go/middleware"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
 // Sends custom events to Amazon EventBridge so that they can be matched to rules.
 //
-// The maximum size for a PutEvents event entry is 256 KB. Entry size is
-// calculated including the event and any necessary characters and keys of the JSON
-// representation of the event. To learn more, see [Calculating PutEvents event entry size]in the Amazon EventBridge User
-// Guide
+// You can batch multiple event entries into one request for efficiency. However,
+// the total entry size must be less than 256KB. You can calculate the entry size
+// before you send the events. For more information, see [Calculating PutEvents event entry size]in the Amazon EventBridge
+// User Guide .
 //
 // PutEvents accepts the data in JSON format. For the JSON number (integer) data
 // type, the constraints are: a minimum value of -9,223,372,036,854,775,808 and a
 // maximum value of 9,223,372,036,854,775,807.
 //
-// PutEvents will only process nested JSON up to 1100 levels deep.
+// PutEvents will only process nested JSON up to 1000 levels deep.
 //
-// [Calculating PutEvents event entry size]: https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-putevent-size.html
+// [Calculating PutEvents event entry size]: https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-putevents.html#eb-putevent-size
 func (c *Client) PutEvents(ctx context.Context, params *PutEventsInput, optFns ...func(*Options)) (*PutEventsOutput, error) {
 	if params == nil {
 		params = &PutEventsInput{}
@@ -86,9 +83,6 @@ type PutEventsOutput struct {
 }
 
 func (c *Client) addOperationPutEventsMiddlewares(stack *middleware.Stack, options Options) (err error) {
-	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
-		return err
-	}
 	err = stack.Serialize.Add(&awsAwsjson11_serializeOpPutEvents{}, middleware.After)
 	if err != nil {
 		return err
@@ -97,19 +91,7 @@ func (c *Client) addOperationPutEventsMiddlewares(stack *middleware.Stack, optio
 	if err != nil {
 		return err
 	}
-	if err := addProtocolFinalizerMiddlewares(stack, options, "PutEvents"); err != nil {
-		return fmt.Errorf("add protocol finalizers: %v", err)
-	}
 
-	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
-		return err
-	}
-	if err = addSetLoggerMiddleware(stack, options); err != nil {
-		return err
-	}
-	if err = addClientRequestID(stack); err != nil {
-		return err
-	}
 	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
@@ -119,43 +101,16 @@ func (c *Client) addOperationPutEventsMiddlewares(stack *middleware.Stack, optio
 	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetry(stack, options); err != nil {
-		return err
-	}
-	if err = addRawResponseToMetadata(stack); err != nil {
-		return err
-	}
-	if err = addRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack, options); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
+	if err = addRecordResponseTiming(stack, options); err != nil {
 		return err
 	}
 	if err = addPutEventsUpdateEndpoint(stack, options); err != nil {
 		return err
 	}
-	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addTimeOffsetBuild(stack, c); err != nil {
-		return err
-	}
-	if err = addUserAgentRetryMode(stack, options); err != nil {
+	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
 	if err = addOpPutEventsValidationMiddleware(stack); err != nil {
-		return err
-	}
-	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opPutEvents(options.Region), middleware.Before); err != nil {
-		return err
-	}
-	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -168,6 +123,9 @@ func (c *Client) addOperationPutEventsMiddlewares(stack *middleware.Stack, optio
 		return err
 	}
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
+	if err = addInterceptors(stack, options); err != nil {
 		return err
 	}
 	return nil
@@ -189,12 +147,4 @@ func addPutEventsUpdateEndpoint(stack *middleware.Stack, o Options) error {
 		EndpointResolver:        o.EndpointResolver,
 		EndpointResolverOptions: o.EndpointOptions,
 	})
-}
-
-func newServiceMetadataMiddleware_opPutEvents(region string) *awsmiddleware.RegisterServiceMetadata {
-	return &awsmiddleware.RegisterServiceMetadata{
-		Region:        region,
-		ServiceID:     ServiceID,
-		OperationName: "PutEvents",
-	}
 }

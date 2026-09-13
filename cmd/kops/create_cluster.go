@@ -61,10 +61,15 @@ import (
 
 type CreateClusterOptions struct {
 	cloudup.NewClusterOptions
-	Yes                        bool
-	Target                     string
+	Yes bool
+
+	// Target is the type of target we will operate against (direct, dry-run, terraform)
+	Target cloudup.Target
+
 	ControlPlaneVolumeSize     int32
 	NodeVolumeSize             int32
+	NodeVolumeType             string
+	ControlPlaneVolumeType     string
 	ContainerRuntime           string
 	OutDir                     string
 	DisableSubnetTags          bool
@@ -152,6 +157,22 @@ var (
 		--node-count 3 \
 		--yes
 
+	# Create a cluster in GCE with a dedicated APIServer-Only front-end.
+	export KOPS_FEATURE_FLAGS="+APIServerNodes"
+	export ZONES="us-west1-a,us-west1-b,us-west1-c"
+	export PROJECT="my-project"
+	export KOPS_STATE_STORE="gs://${PROJECT}-kops-state"
+	export KOPS_CLUSTER_NAME="k8s-cluster.example.com"
+	kops create cluster --name=${KOPS_CLUSTER_NAME} \
+	    --cloud=gce \
+	    --zones=${ZONES} \
+		--project=${PROJECT} \
+		--node-count=3 --node-size=e2-standard-2 \
+		--api-server-count=2 --api-server-size=e2-standard-2 \
+		--control-plane-count=3 --control-plane-size=e2-standard-4 \
+		--yes
+
+
 	# Generate a cluster spec to apply later.
 	# Run the following, then: kops create -f filename.yaml
 	kops create cluster --name=k8s-cluster.example.com \
@@ -191,6 +212,10 @@ func NewCmdCreateCluster(f *util.Factory, out io.Writer) *cobra.Command {
 				options.EncryptEtcdStorage = &encryptEtcdStorage
 			}
 
+			if err := checkProjectFlag(cmd.Flag("project").Changed, options.Project); err != nil {
+				return err
+			}
+
 			if sshPublicKey != "" {
 				options.SSHPublicKeys, err = loadSSHPublicKeys(sshPublicKey)
 				if err != nil {
@@ -203,7 +228,7 @@ func NewCmdCreateCluster(f *util.Factory, out io.Writer) *cobra.Command {
 	}
 
 	cmd.Flags().BoolVarP(&options.Yes, "yes", "y", options.Yes, "Specify --yes to immediately create the cluster")
-	cmd.Flags().StringVar(&options.Target, "target", options.Target, fmt.Sprintf("Valid targets: %s, %s. Set this flag to %s if you want kOps to generate terraform", cloudup.TargetDirect, cloudup.TargetTerraform, cloudup.TargetTerraform))
+	cmd.Flags().Var(&options.Target, "target", fmt.Sprintf("Valid targets: %q, %q. Set this flag to %q if you want kOps to generate terraform", cloudup.TargetDirect, cloudup.TargetTerraform, cloudup.TargetTerraform))
 	cmd.RegisterFlagCompletionFunc("target", completeCreateClusterTarget(options))
 
 	// Configuration / state location
@@ -219,6 +244,14 @@ func NewCmdCreateCluster(f *util.Factory, out io.Writer) *cobra.Command {
 		// TODO complete vfs paths
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	})
+
+	if featureflag.DiscoveryService.Enabled() {
+		cmd.Flags().StringVar(&options.PublicDiscoveryServiceURL, "discovery-service", options.PublicDiscoveryServiceURL, "A URL to a server implementing public OIDC discovery. Enables IRSA in AWS.")
+		cmd.RegisterFlagCompletionFunc("discovery-service", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			// TODO complete vfs paths
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		})
+	}
 
 	var validClouds []string
 	{
@@ -249,7 +282,7 @@ func NewCmdCreateCluster(f *util.Factory, out io.Writer) *cobra.Command {
 	cmd.RegisterFlagCompletionFunc("kubernetes-version", completeKubernetesVersion)
 
 	cmd.Flags().StringSliceVar(&options.KubernetesFeatureGates, "kubernetes-feature-gates", options.KubernetesFeatureGates, "List of Kubernetes feature gates to enable/disable")
-	cmd.RegisterFlagCompletionFunc("kubernetes-version", completeKubernetesFeatureGates)
+	cmd.RegisterFlagCompletionFunc("kubernetes-feature-gates", completeKubernetesFeatureGates)
 
 	cmd.Flags().StringVar(&options.ContainerRuntime, "container-runtime", options.ContainerRuntime, "Container runtime to use: containerd")
 	cmd.Flags().MarkDeprecated("container-runtime", "containerd is the only supported value")
@@ -266,6 +299,14 @@ func NewCmdCreateCluster(f *util.Factory, out io.Writer) *cobra.Command {
 	cmd.Flags().MarkDeprecated("master-count", "use --control-plane-count instead")
 	cmd.Flags().Int32Var(&options.ControlPlaneCount, "control-plane-count", options.ControlPlaneCount, "Number of control-plane nodes. Defaults to one control-plane node per control-plane-zone")
 	cmd.Flags().Int32Var(&options.NodeCount, "node-count", options.NodeCount, "Total number of worker nodes. Defaults to one node per zone")
+	if featureflag.APIServerNodes.Enabled() {
+		cmd.Flags().Int32Var(&options.APIServerCount, "api-server-count", options.APIServerCount, "Number of API server nodes. Defaults to 0.")
+	}
+	if featureflag.ExperimentalRoles.Enabled() {
+		cmd.Flags().Int32Var(&options.EtcdCount, "etcd-count", options.EtcdCount, "Number of etcd nodes. Defaults to 0.")
+		cmd.Flags().Int32Var(&options.SchedulerCount, "scheduler-count", options.SchedulerCount, "Number of scheduler nodes. Defaults to 0.")
+		cmd.Flags().Int32Var(&options.KubeControllerManagerCount, "kcm-count", options.KubeControllerManagerCount, "Number of kube-controller-manager nodes. Defaults to 0.")
+	}
 
 	cmd.Flags().StringVar(&options.Image, "image", options.Image, "Machine image for all instances")
 	cmd.RegisterFlagCompletionFunc("image", completeInstanceImage)
@@ -284,11 +325,26 @@ func NewCmdCreateCluster(f *util.Factory, out io.Writer) *cobra.Command {
 	cmd.Flags().MarkDeprecated("master-size", "use --control-plane-size instead")
 	cmd.Flags().StringSliceVar(&options.ControlPlaneSizes, "control-plane-size", options.ControlPlaneSizes, "Machine type(s) for control-plane nodes")
 	cmd.RegisterFlagCompletionFunc("control-plane-size", completeMachineType)
+	if featureflag.APIServerNodes.Enabled() {
+		cmd.Flags().StringSliceVar(&options.APIServerSizes, "api-server-size", options.APIServerSizes, "Machine type(s) for API server nodes")
+		cmd.RegisterFlagCompletionFunc("api-server-size", completeMachineType)
+	}
+	if featureflag.ExperimentalRoles.Enabled() {
+		cmd.Flags().StringSliceVar(&options.EtcdSizes, "etcd-size", options.EtcdSizes, "Machine type(s) for etcd nodes")
+		cmd.RegisterFlagCompletionFunc("etcd-size", completeMachineType)
+		cmd.Flags().StringSliceVar(&options.SchedulerSizes, "scheduler-size", options.SchedulerSizes, "Machine type(s) for scheduler nodes")
+		cmd.RegisterFlagCompletionFunc("scheduler-size", completeMachineType)
+		cmd.Flags().StringSliceVar(&options.KubeControllerManagerSizes, "kcm-size", options.KubeControllerManagerSizes, "Machine type(s) for kube-controller-manager nodes")
+		cmd.RegisterFlagCompletionFunc("kcm-size", completeMachineType)
+	}
 
 	cmd.Flags().Int32Var(&options.ControlPlaneVolumeSize, "master-volume-size", options.ControlPlaneVolumeSize, "Instance volume size (in GB) for control-plane nodes")
 	cmd.Flags().MarkDeprecated("master-volume-size", "use --control-plane-volume-size instead")
 	cmd.Flags().Int32Var(&options.ControlPlaneVolumeSize, "control-plane-volume-size", options.ControlPlaneVolumeSize, "Instance volume size (in GB) for control-plane nodes")
 	cmd.Flags().Int32Var(&options.NodeVolumeSize, "node-volume-size", options.NodeVolumeSize, "Instance volume size (in GB) for worker nodes")
+
+	cmd.Flags().StringVar(&options.NodeVolumeType, "node-volume-type", options.NodeVolumeType, "Instance volume type (e.g. gp2, gp3, io1) for worker nodes")
+	cmd.Flags().StringVar(&options.ControlPlaneVolumeType, "control-plane-volume-type", options.ControlPlaneVolumeType, "Instance volume type for control-plane nodes")
 
 	cmd.Flags().StringVar(&options.NetworkID, "vpc", options.NetworkID, "Shared Network or VPC to use")
 	cmd.Flags().MarkDeprecated("vpc", "use --network-id instead")
@@ -305,16 +361,16 @@ func NewCmdCreateCluster(f *util.Factory, out io.Writer) *cobra.Command {
 	})
 	cmd.Flags().BoolVar(&options.DisableSubnetTags, "disable-subnet-tags", options.DisableSubnetTags, "Disable automatic subnet tagging")
 
-	cmd.Flags().StringSliceVar(&options.EtcdClusters, "etcd-clusters", options.EtcdClusters, "Names of the etcd clusters: main, events")
+	cmd.Flags().StringSliceVar(&options.EtcdClusters, "etcd-clusters", options.EtcdClusters, "Names of the etcd clusters: main, events, leases")
 	cmd.RegisterFlagCompletionFunc("etcd-clusters", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return []string{"main", "events"}, cobra.ShellCompDirectiveNoFileComp
+		return []string{"main", "events", "leases"}, cobra.ShellCompDirectiveNoFileComp
 	})
 
 	cmd.Flags().BoolVar(&encryptEtcdStorage, "encrypt-etcd-storage", false, "Generate key in AWS KMS and use it for encrypt etcd volumes")
 	cmd.Flags().StringVar(&options.EtcdStorageType, "etcd-storage-type", options.EtcdStorageType, "The default storage type for etcd members")
 	cmd.RegisterFlagCompletionFunc("etcd-storage-type", completeStorageType)
 
-	cmd.Flags().StringVar(&options.Networking, "networking", options.Networking, "Networking mode.  kubenet, external, flannel-vxlan (or flannel), flannel-udp, calico, canal, kube-router, amazonvpc, cilium, cilium-etcd, cni.")
+	cmd.Flags().StringVar(&options.Networking, "networking", options.Networking, "Networking mode.  kubenet, external, flannel-vxlan (or flannel), flannel-udp, calico, kube-router, amazonvpc, cilium, cilium-etcd, kindnet, cni.")
 	cmd.RegisterFlagCompletionFunc("networking", completeNetworking(options))
 
 	cmd.Flags().StringVar(&options.DNSZone, "dns-zone", options.DNSZone, "DNS hosted zone (defaults to longest matching zone)")
@@ -381,11 +437,6 @@ func NewCmdCreateCluster(f *util.Factory, out io.Writer) *cobra.Command {
 	cmd.Flags().StringVar(&options.NodeTenancy, "node-tenancy", options.NodeTenancy, "Tenancy of the node group (AWS only): default or dedicated")
 	cmd.RegisterFlagCompletionFunc("node-tenancy", completeTenancy)
 
-	cmd.Flags().StringVar(&options.APILoadBalancerClass, "api-loadbalancer-class", options.APILoadBalancerClass, "Class of load balancer for the Kubernetes API (AWS only): classic or network")
-	cmd.Flags().MarkDeprecated("api-loadbalancer-class", "network load balancer should be used for all newly created clusters")
-	cmd.RegisterFlagCompletionFunc("api-loadbalancer-class", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return []string{"classic", "network"}, cobra.ShellCompDirectiveNoFileComp
-	})
 	cmd.Flags().StringVar(&options.APILoadBalancerType, "api-loadbalancer-type", options.APILoadBalancerType, "Type of load balancer for the Kubernetes API: public or internal")
 	cmd.RegisterFlagCompletionFunc("api-loadbalancer-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{"public", "internal"}, cobra.ShellCompDirectiveNoFileComp
@@ -444,10 +495,6 @@ func NewCmdCreateCluster(f *util.Factory, out io.Writer) *cobra.Command {
 		cmd.RegisterFlagCompletionFunc("spotinst-product", completeSpotinstProduct)
 		cmd.Flags().StringVar(&options.SpotinstOrientation, "spotinst-orientation", options.SpotinstOrientation, "Prediction strategy (valid values: balanced, cost, equal-distribution and availability)")
 		cmd.RegisterFlagCompletionFunc("spotinst-orientation", completeSpotinstOrientation)
-	}
-
-	if featureflag.APIServerNodes.Enabled() {
-		cmd.Flags().Int32Var(&options.APIServerCount, "api-server-count", options.APIServerCount, "Number of API server nodes. Defaults to 0.")
 	}
 
 	// Openstack flags
@@ -533,6 +580,12 @@ func RunCreateCluster(ctx context.Context, f *util.Factory, out io.Writer, c *Cr
 		c.NetworkID = c.OpenstackNetworkID
 	}
 
+	if featureflag.Azure.Enabled() {
+		if c.CloudProvider == "azure" && c.AzureSubscriptionID == "" {
+			return fmt.Errorf("--azure-subscription-id is required")
+		}
+	}
+
 	clusterResult, err := cloudup.NewCluster(&c.NewClusterOptions, clientset)
 	if err != nil {
 		return err
@@ -544,10 +597,10 @@ func RunCreateCluster(ctx context.Context, f *util.Factory, out io.Writer, c *Cr
 	var controlPlanes []*api.InstanceGroup
 	var nodes []*api.InstanceGroup
 	for _, ig := range instanceGroups {
-		switch ig.Spec.Role {
-		case api.InstanceGroupRoleControlPlane:
+		switch {
+		case ig.Spec.Role.HasControlPlane():
 			controlPlanes = append(controlPlanes, ig)
-		case api.InstanceGroupRoleNode:
+		case ig.Spec.Role.HasNode():
 			nodes = append(nodes, ig)
 		}
 	}
@@ -595,7 +648,16 @@ func RunCreateCluster(ctx context.Context, f *util.Factory, out io.Writer, c *Cr
 			if group.Spec.RootVolume == nil {
 				group.Spec.RootVolume = &api.InstanceRootVolumeSpec{}
 			}
-			group.Spec.RootVolume.Size = fi.PtrTo(c.ControlPlaneVolumeSize)
+			group.Spec.RootVolume.Size = new(c.ControlPlaneVolumeSize)
+		}
+	}
+
+	if c.ControlPlaneVolumeType != "" {
+		for _, group := range controlPlanes {
+			if group.Spec.RootVolume == nil {
+				group.Spec.RootVolume = &api.InstanceRootVolumeSpec{}
+			}
+			group.Spec.RootVolume.Type = new(c.ControlPlaneVolumeType)
 		}
 	}
 
@@ -604,7 +666,16 @@ func RunCreateCluster(ctx context.Context, f *util.Factory, out io.Writer, c *Cr
 			if group.Spec.RootVolume == nil {
 				group.Spec.RootVolume = &api.InstanceRootVolumeSpec{}
 			}
-			group.Spec.RootVolume.Size = fi.PtrTo(c.NodeVolumeSize)
+			group.Spec.RootVolume.Size = new(c.NodeVolumeSize)
+		}
+	}
+
+	if c.NodeVolumeType != "" {
+		for _, group := range nodes {
+			if group.Spec.RootVolume == nil {
+				group.Spec.RootVolume = &api.InstanceRootVolumeSpec{}
+			}
+			group.Spec.RootVolume.Type = new(c.NodeVolumeType)
 		}
 	}
 
@@ -621,7 +692,7 @@ func RunCreateCluster(ctx context.Context, f *util.Factory, out io.Writer, c *Cr
 	}
 
 	if c.DisableSubnetTags {
-		cluster.Spec.Networking.TagSubnets = fi.PtrTo(false)
+		cluster.Spec.Networking.TagSubnets = new(false)
 	}
 
 	if c.APIPublicName != "" {
@@ -633,6 +704,19 @@ func RunCreateCluster(ctx context.Context, f *util.Factory, out io.Writer, c *Cr
 	}
 	if err := commands.SetClusterFields(c.Sets, cluster); err != nil {
 		return err
+	}
+
+	// Calico's eBPF dataplane replaces kube-proxy and from v3.31 also binds the
+	// kube-proxy healthz port (10256), so kube-proxy must be disabled to avoid
+	// a port conflict that breaks the BPF dataplane.
+	// https://docs.tigera.io/calico-enterprise/latest/operations/ebpf/install#disable-kube-proxy-or-avoid-conflicts
+	if calico := cluster.Spec.Networking.Calico; calico != nil && calico.BPFEnabled {
+		if cluster.Spec.KubeProxy == nil {
+			cluster.Spec.KubeProxy = &api.KubeProxyConfig{}
+		}
+		if cluster.Spec.KubeProxy.Enabled == nil {
+			cluster.Spec.KubeProxy.Enabled = new(false)
+		}
 	}
 
 	cloud, err := cloudup.BuildCloud(cluster)
@@ -651,7 +735,7 @@ func RunCreateCluster(ctx context.Context, f *util.Factory, out io.Writer, c *Cr
 		return err
 	}
 
-	assetBuilder := assets.NewAssetBuilder(clientset.VFSContext(), cluster.Spec.Assets, cluster.Spec.KubernetesVersion, false)
+	assetBuilder := assets.NewAssetBuilder(clientset.VFSContext(), cluster.Spec.Assets, false)
 	fullCluster, err := cloudup.PopulateClusterSpec(ctx, clientset, cluster, instanceGroups, cloud, assetBuilder)
 	if err != nil {
 		return err
@@ -753,8 +837,8 @@ func RunCreateCluster(ctx context.Context, f *util.Factory, out io.Writer, c *Cr
 		if autoloadSSHPublicKeys {
 			// Load from default locations, if found
 			sshPublicKeyPaths := []string{
-				"~/.ssh/id_rsa.pub",
 				"~/.ssh/id_ed25519.pub",
+				"~/.ssh/id_rsa.pub",
 			}
 			var merr error
 			for _, sshPublicKeyPath := range sshPublicKeyPaths {
@@ -802,9 +886,10 @@ func RunCreateCluster(ctx context.Context, f *util.Factory, out io.Writer, c *Cr
 		updateClusterOptions.Yes = c.Yes
 		updateClusterOptions.Target = c.Target
 		updateClusterOptions.OutDir = c.OutDir
-		updateClusterOptions.admin = kubeconfig.DefaultKubecfgAdminLifetime
 		updateClusterOptions.ClusterName = cluster.Name
-		updateClusterOptions.CreateKubecfg = true
+
+		updateClusterOptions.CreateKubecfgOptions.Admin = kubeconfig.DefaultKubecfgAdminLifetime
+		updateClusterOptions.CreateKubecfgOptions.CreateKubecfg = true
 
 		// SSHPublicKey has already been mapped
 		updateClusterOptions.SSHPublicKey = ""
@@ -842,13 +927,23 @@ func RunCreateCluster(ctx context.Context, f *util.Factory, out io.Writer, c *Cr
 	return nil
 }
 
+// checkProjectFlag rejects an explicitly empty --project flag. An empty value usually comes from
+// an unset environment variable (e.g. --project=$PROJECT); silently accepting it would fall back
+// to the gcloud default project, which may not be the intended one.
+func checkProjectFlag(flagSet bool, project string) error {
+	if flagSet && project == "" {
+		return fmt.Errorf("--project cannot be empty; specify a project or omit the flag to use the gcloud default project")
+	}
+	return nil
+}
+
 // parseCloudLabels takes a CSV list of key=value records and parses them into a map. Nested '='s are supported via
 // quoted strings (eg `foo="bar=baz"` parses to map[string]string{"foo":"bar=baz"}. Nested commas are not supported.
 func parseCloudLabels(s string) (map[string]string, error) {
 	// Replace commas with newlines to allow a single pass with csv.Reader.
 	// We can't use csv.Reader for the initial split because it would see each key=value record as a single field
 	// and significantly complicates using quoted fields as keys or values.
-	records := strings.Replace(s, ",", "\n", -1)
+	records := strings.ReplaceAll(s, ",", "\n")
 
 	// Let the CSV library do the heavy-lifting in handling nested ='s
 	r := csv.NewReader(strings.NewReader(records))
@@ -897,7 +992,7 @@ func completeZone(options *CreateClusterOptions, rootCommand *RootCmd) func(cmd 
 }
 
 func completeKubernetesVersion(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	kopsVersion, err := kopsutil.ParseKubernetesVersion(kopsbase.KOPS_RELEASE_VERSION)
+	kopsVersion, err := kopsutil.ParseKubernetesVersion(kopsbase.Version)
 	if err != nil {
 		commandutils.CompletionError("parsing kops version", err)
 	}
@@ -982,14 +1077,13 @@ func completeNetworking(options *CreateClusterOptions) func(cmd *cobra.Command, 
 			"cilium",
 			"cilium-eni",
 			"cilium-etcd",
+			"kindnet",
 		}
 
 		if !options.IPv6 {
 			completions = append(completions,
 				"kubenet",
-				"kopeio",
 				"flannel",
-				"canal",
 				"kube-router",
 			)
 
@@ -1008,7 +1102,7 @@ func completeNetworking(options *CreateClusterOptions) func(cmd *cobra.Command, 
 
 func completeCreateClusterTarget(options *CreateClusterOptions) func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		completions := []string{
+		completions := []cloudup.Target{
 			cloudup.TargetDirect,
 			cloudup.TargetDryRun,
 		}
@@ -1017,7 +1111,7 @@ func completeCreateClusterTarget(options *CreateClusterOptions) func(cmd *cobra.
 				completions = append(completions, cloudup.TargetTerraform)
 			}
 		}
-		return completions, cobra.ShellCompDirectiveNoFileComp
+		return toStringSlice(completions), cobra.ShellCompDirectiveNoFileComp
 	}
 }
 

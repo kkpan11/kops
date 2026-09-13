@@ -4,11 +4,8 @@ package eventbridge
 
 import (
 	"context"
-	"fmt"
-	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
 	"github.com/aws/aws-sdk-go-v2/service/eventbridge/types"
 	"github.com/aws/smithy-go/middleware"
-	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
 // Updates the specified event bus.
@@ -32,7 +29,9 @@ type UpdateEventBusInput struct {
 	// Configuration details of the Amazon SQS queue for EventBridge to use as a
 	// dead-letter queue (DLQ).
 	//
-	// For more information, see Event retry policy and using dead-letter queues in the EventBridge User Guide.
+	// For more information, see [Using dead-letter queues to process undelivered events] in the EventBridge User Guide.
+	//
+	// [Using dead-letter queues to process undelivered events]: https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-rule-event-delivery.html#eb-rule-dlq
 	DeadLetterConfig *types.DeadLetterConfig
 
 	// The event bus description.
@@ -46,28 +45,39 @@ type UpdateEventBusInput struct {
 	// If you do not specify a customer managed key identifier, EventBridge uses an
 	// Amazon Web Services owned key to encrypt events on the event bus.
 	//
-	// For more information, see [Managing keys] in the Key Management Service Developer Guide.
+	// For more information, see [Identify and view keys] in the Key Management Service Developer Guide.
 	//
-	// Archives and schema discovery are not supported for event buses encrypted using
-	// a customer managed key. EventBridge returns an error if:
-	//
-	//   - You call [CreateArchive]on an event bus set to use a customer managed key for encryption.
+	// Schema discovery is not supported for event buses encrypted using a customer
+	// managed key. EventBridge returns an error if:
 	//
 	//   - You call [CreateDiscoverer]on an event bus set to use a customer managed key for encryption.
 	//
-	//   - You call [UpdatedEventBus]to set a customer managed key on an event bus with an archives or
-	//   schema discovery enabled.
+	//   - You call [UpdatedEventBus]to set a customer managed key on an event bus with schema
+	//   discovery enabled.
 	//
-	// To enable archives or schema discovery on an event bus, choose to use an Amazon
-	// Web Services owned key. For more information, see [Data encryption in EventBridge]in the Amazon EventBridge
-	// User Guide.
+	// To enable schema discovery on an event bus, choose to use an Amazon Web
+	// Services owned key. For more information, see [Encrypting events]in the Amazon EventBridge User
+	// Guide.
+	//
+	// If you have specified that EventBridge use a customer managed key for
+	// encrypting the source event bus, we strongly recommend you also specify a
+	// customer managed key for any archives for the event bus as well.
+	//
+	// For more information, see [Encrypting archives] in the Amazon EventBridge User Guide.
 	//
 	// [UpdatedEventBus]: https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_UpdatedEventBus.html
-	// [Data encryption in EventBridge]: https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-encryption.html
-	// [Managing keys]: https://docs.aws.amazon.com/kms/latest/developerguide/getting-started.html
-	// [CreateArchive]: https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_CreateArchive.html
+	// [Encrypting events]: https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-encryption-event-bus-cmkey.html
+	// [Identify and view keys]: https://docs.aws.amazon.com/kms/latest/developerguide/viewing-keys.html
+	// [Encrypting archives]: https://docs.aws.amazon.com/eventbridge/latest/userguide/encryption-archives.html
 	// [CreateDiscoverer]: https://docs.aws.amazon.com/eventbridge/latest/schema-reference/v1-discoverers.html#CreateDiscoverer
 	KmsKeyIdentifier *string
+
+	// The logging configuration settings for the event bus.
+	//
+	// For more information, see [Configuring logs for event buses] in the EventBridge User Guide.
+	//
+	// [Configuring logs for event buses]: https://docs.aws.amazon.com/eb-event-bus-logs.html
+	LogConfig *types.LogConfig
 
 	// The name of the event bus.
 	Name *string
@@ -83,7 +93,9 @@ type UpdateEventBusOutput struct {
 	// Configuration details of the Amazon SQS queue for EventBridge to use as a
 	// dead-letter queue (DLQ).
 	//
-	// For more information, see Event retry policy and using dead-letter queues in the EventBridge User Guide.
+	// For more information, see [Using dead-letter queues to process undelivered events] in the EventBridge User Guide.
+	//
+	// [Using dead-letter queues to process undelivered events]: https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-rule-event-delivery.html#eb-rule-dlq
 	DeadLetterConfig *types.DeadLetterConfig
 
 	// The event bus description.
@@ -97,6 +109,13 @@ type UpdateEventBusOutput struct {
 	// [Data encryption in EventBridge]: https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-encryption.html
 	KmsKeyIdentifier *string
 
+	// The logging configuration settings for the event bus.
+	//
+	// For more information, see [Configuring logs for event buses] in the EventBridge User Guide.
+	//
+	// [Configuring logs for event buses]: https://docs.aws.amazon.com/eb-event-bus-logs.html
+	LogConfig *types.LogConfig
+
 	// The event bus name.
 	Name *string
 
@@ -107,9 +126,6 @@ type UpdateEventBusOutput struct {
 }
 
 func (c *Client) addOperationUpdateEventBusMiddlewares(stack *middleware.Stack, options Options) (err error) {
-	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
-		return err
-	}
 	err = stack.Serialize.Add(&awsAwsjson11_serializeOpUpdateEventBus{}, middleware.After)
 	if err != nil {
 		return err
@@ -118,19 +134,7 @@ func (c *Client) addOperationUpdateEventBusMiddlewares(stack *middleware.Stack, 
 	if err != nil {
 		return err
 	}
-	if err := addProtocolFinalizerMiddlewares(stack, options, "UpdateEventBus"); err != nil {
-		return fmt.Errorf("add protocol finalizers: %v", err)
-	}
 
-	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
-		return err
-	}
-	if err = addSetLoggerMiddleware(stack, options); err != nil {
-		return err
-	}
-	if err = addClientRequestID(stack); err != nil {
-		return err
-	}
 	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
@@ -140,37 +144,10 @@ func (c *Client) addOperationUpdateEventBusMiddlewares(stack *middleware.Stack, 
 	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetry(stack, options); err != nil {
+	if err = addRecordResponseTiming(stack, options); err != nil {
 		return err
 	}
-	if err = addRawResponseToMetadata(stack); err != nil {
-		return err
-	}
-	if err = addRecordResponseTiming(stack); err != nil {
-		return err
-	}
-	if err = addClientUserAgent(stack, options); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
-		return err
-	}
-	if err = addTimeOffsetBuild(stack, c); err != nil {
-		return err
-	}
-	if err = addUserAgentRetryMode(stack, options); err != nil {
-		return err
-	}
-	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opUpdateEventBus(options.Region), middleware.Before); err != nil {
-		return err
-	}
-	if err = addRecursionDetection(stack); err != nil {
+	if err = addCredentialSource(stack, options); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -185,13 +162,8 @@ func (c *Client) addOperationUpdateEventBusMiddlewares(stack *middleware.Stack, 
 	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
 		return err
 	}
-	return nil
-}
-
-func newServiceMetadataMiddleware_opUpdateEventBus(region string) *awsmiddleware.RegisterServiceMetadata {
-	return &awsmiddleware.RegisterServiceMetadata{
-		Region:        region,
-		ServiceID:     ServiceID,
-		OperationName: "UpdateEventBus",
+	if err = addInterceptors(stack, options); err != nil {
+		return err
 	}
+	return nil
 }
